@@ -188,8 +188,22 @@ main:has(#battle-panel.hidden)::before {
 #home-panel .log .system { color: var(--muted-ink); }
 
 .log {
+  /* min-height: 0 is load-bearing: without it, flexbox lets the log GROW
+     with its content instead of scrolling, dragging the page down. */
   flex: 1; overflow-y: auto; font-size: 1rem; line-height: 1.4;
-  border-radius: 6px; padding: 8px; min-height: 110px;
+  border-radius: 6px; padding: 8px; min-height: 0;
+}
+/* Home chat: hard ceiling so long conversations never stretch the page. */
+#home-panel .log { min-height: 110px; max-height: 40vh; }
+
+/* Desktop: pin the columns to the viewport so the chat card flexes into the
+   remaining space and the input never falls below the fold. Narrow screens
+   keep the scrollable panel instead. */
+@media (min-width: 900px) {
+  #home-panel { overflow: hidden; }
+  #home-left { max-height: 100%; }
+  #home-right { max-height: 100%; overflow-y: auto; }
+  #home-panel .log { max-height: none; }
 }
 
 /* Lobbies */
