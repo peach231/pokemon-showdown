@@ -394,12 +394,20 @@ const fullscreenBtn = document.getElementById('fullscreen-btn')!;
 fullscreenBtn.addEventListener('click', () => {
   if (document.fullscreenElement) {
     void document.exitFullscreen().catch(() => { /* not fullscreen */ });
-  } else {
-    void document.documentElement.requestFullscreen().catch(() => {
-      // Blocked (e.g. embed without allow="fullscreen"): open directly instead.
-      window.open(location.href, '_blank');
-    });
+    return;
   }
+  void document.documentElement.requestFullscreen().catch(() => {
+    // Real fullscreen denied (e.g. Wix wraps embeds in an iframe that
+    // doesn't grant fullscreen permission). Take over the CURRENT tab
+    // instead — visitors get back to the host site with the Back button.
+    try {
+      if (window.top && window.top !== window) {
+        window.top.location.href = location.href;
+        return;
+      }
+    } catch { /* sandbox forbids top navigation */ }
+    window.open(location.href, '_blank'); // last resort
+  });
 });
 document.addEventListener('fullscreenchange', () => {
   const on = !!document.fullscreenElement;
