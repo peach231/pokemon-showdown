@@ -388,6 +388,25 @@ document.addEventListener('keydown', (e) => {
   renderer.handleKey(e);
 });
 
+// Fullscreen toggle: fullscreens THIS page (works inside website embeds too,
+// as long as the iframe has allow="fullscreen").
+const fullscreenBtn = document.getElementById('fullscreen-btn')!;
+fullscreenBtn.addEventListener('click', () => {
+  if (document.fullscreenElement) {
+    void document.exitFullscreen().catch(() => { /* not fullscreen */ });
+  } else {
+    void document.documentElement.requestFullscreen().catch(() => {
+      // Blocked (e.g. embed without allow="fullscreen"): open directly instead.
+      window.open(location.href, '_blank');
+    });
+  }
+});
+document.addEventListener('fullscreenchange', () => {
+  const on = !!document.fullscreenElement;
+  fullscreenBtn.classList.toggle('active-toggle', on);
+  fullscreenBtn.title = on ? 'Exit full screen' : 'Full screen';
+});
+
 const muteBtn = document.getElementById('mute-btn')!;
 muteBtn.textContent = Sound.muted ? '🔇' : '🔊';
 muteBtn.addEventListener('click', () => {
