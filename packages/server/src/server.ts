@@ -20,6 +20,7 @@ import {
 } from './random-team.js';
 import { LadderStore, STARTING_ELO } from './ladder.js';
 import { AccountStore } from './accounts.js';
+import { createDb } from './db.js';
 import { User } from './user.js';
 import { BattleRoom } from './battle-room.js';
 import { runBot } from './bot.js';
@@ -66,7 +67,7 @@ interface PersistedBattle {
 }
 
 export class GameServer {
-  private wss: WebSocketServer;
+  private wss!: WebSocketServer;
   readonly users = new Map<string, User>();
   private socketUsers = new Map<WebSocket, User>();
   readonly battles = new Map<string, BattleRoom>();
@@ -79,20 +80,35 @@ export class GameServer {
   private dcTimers = new Map<string, NodeJS.Timeout>();
   /** Pending per-decision timers, keyed `roomId|side`. */
   private turnTimers = new Map<string, NodeJS.Timeout>();
-  readonly ladder = new LadderStore(path.join(DATA_DIR, 'ladder.json'));
-  readonly accounts = new AccountStore(path.join(DATA_DIR, 'accounts.json'));
+  private db = createDb();
+  readonly ladder = new LadderStore(this.db, path.join(DATA_DIR, 'ladder.json'));
+  readonly accounts = new AccountStore(this.db, path.join(DATA_DIR, 'accounts.json'));
   private rankedQueue: { user: User; team: TeamSpec[] }[] = [];
+  /** Resolves once stores are warm and the socket is listening. */
+  readonly ready: Promise<void>;
 
   constructor(port: number) {
+    this.ready = this.bootstrap(port);
+    this.ready.catch((err) => {
+      console.error('fatal: server failed to start:', err);
+      process.exit(1);
+    });
+  }
+
+  private async bootstrap(port: number): Promise<void> {
+    // Warm the persistent stores BEFORE accepting connections, so logins
+    // and ratings are never served from a cold cache.
+    await this.accounts.init();
+    await this.ladder.init();
+
     // One HTTP server: serves the built client AND carries the WebSocket,
     // so a single Render/Fly/VM port runs the whole game.
     const httpServer = http.createServer((req, res) => this.serveStatic(req, res));
     this.wss = new WebSocketServer({ server: httpServer });
     this.wss.on('connection', (ws) => this.onConnection(ws));
-    httpServer.listen(port, () => {
-      console.log(`simple-showdown server listening on http+ws://localhost:${port}`);
-    });
-    void this.restoreBattles();
+    await new Promise<void>((resolve) => httpServer.listen(port, resolve));
+    console.log(`simple-showdown server listening on http+ws://localhost:${port}`);
+    await this.restoreBattles();
   }
 
   private serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {

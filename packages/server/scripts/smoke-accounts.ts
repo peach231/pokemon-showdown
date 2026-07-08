@@ -16,8 +16,9 @@ import * as path from 'node:path';
 import WebSocket from 'ws';
 import { GameServer } from '../src/server.js';
 
-// Fresh account/ladder state for the test run.
+// Fresh account/ladder state for the test run (local file database).
 const dataDir = path.join(process.cwd(), 'packages', 'server', 'data');
+try { fs.unlinkSync(path.join(dataDir, 'game.db')); } catch { /* absent */ }
 try { fs.unlinkSync(path.join(dataDir, 'accounts.json')); } catch { /* absent */ }
 
 const PORT = 8125;
