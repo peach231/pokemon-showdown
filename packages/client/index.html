@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pok&eacute;mon Showdown</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <span class="brand">Pok&eacute;mon Showdown</span>
+      <span id="online-count" class="online-count" title="Players online"><span class="dot"></span>&ndash;</span>
+      <span id="username" class="username">connecting&hellip;</span>
+      <button id="avatar-btn" class="avatar-btn" title="Choose your trainer"><img id="avatar-img" alt="" width="32" height="32" /></button>
+      <span id="rating-chip" class="rating-chip hidden" title="Your ranked rating"></span>
+      <button id="rename-btn" class="ghost">Change name</button>
+      <button id="register-btn" class="ghost">Register</button>
+      <button id="login-btn" class="ghost">Log in</button>
+      <button id="logout-btn" class="ghost hidden">Log out</button>
+      <button id="mute-btn" class="ghost" title="Toggle sound">🔊</button>
+    </header>
+    <main id="layout">
+      <section id="battle-panel" class="hidden">
+        <div id="scene">
+          <div id="field">
+            <div id="weather-layer"></div>
+            <div class="platform platform-foe"></div>
+            <div class="platform platform-ally"></div>
+            <div class="spot spot-foe"><img id="sprite-foe" class="sprite" alt="" /></div>
+            <div class="spot spot-ally"><img id="sprite-ally" class="sprite" alt="" /></div>
+            <div id="statbar-foe" class="statbar hidden"></div>
+            <div id="statbar-ally" class="statbar hidden"></div>
+            <img id="trainer-foe" class="trainer-standin trainer-standin-foe hidden" alt="" />
+            <img id="trainer-ally" class="trainer-standin trainer-standin-ally hidden" alt="" />
+            <div id="turn-timer" class="turn-timer hidden"></div>
+            <div id="fx-layer"></div>
+          </div>
+          <div id="battle-controls">
+            <div id="battle-menu"></div>
+          </div>
+        </div>
+        <aside id="battle-side">
+          <div id="battle-log" class="log"></div>
+          <form id="battle-chat-form">
+            <input id="battle-chat-input" autocomplete="off" placeholder="Chat in battle&hellip;" />
+          </form>
+          <button id="forfeit-btn" class="ghost">Forfeit</button>
+        </aside>
+      </section>
+      <section id="home-panel">
+        <div id="home-left">
+          <div class="home-card">
+            <div class="card-head">
+              <h2>Your Team</h2>
+              <button id="clear-team-btn" class="ghost" title="Empty slots become random Pok&eacute;mon">Clear (random)</button>
+            </div>
+            <div id="team-boxes"></div>
+            <div class="hint" id="team-hint">Added Pok&eacute;mon get an auto-picked moveset &mdash; click one to swap in your own moves. Empty slots become random Pok&eacute;mon.</div>
+            <div id="team-editor" class="hidden"></div>
+          </div>
+          <div class="home-card">
+            <div class="card-head">
+              <h2>Battle!</h2>
+              <span class="btn-row">
+                <button id="ranked-btn" class="primary">Ranked Search</button>
+                <button id="create-lobby-btn">Create lobby</button>
+                <button id="bot-btn" class="ghost">vs Bot</button>
+              </span>
+            </div>
+            <div id="search-status" class="hint"></div>
+            <div id="lobby-list" class="lobby-list"></div>
+          </div>
+          <div class="home-card grow">
+            <div class="card-head">
+              <h2>Chat</h2>
+              <button id="userlist-btn" class="ghost">0 online ▾</button>
+            </div>
+            <div id="userlist" class="userlist hidden"></div>
+            <div id="lobby-log" class="log"></div>
+            <form id="lobby-chat-form">
+              <input id="lobby-chat-input" autocomplete="off" placeholder="Say something&hellip;" />
+            </form>
+          </div>
+        </div>
+        <div id="home-right" class="home-card">
+          <div class="tab-bar">
+            <button class="tab active" id="tab-dex">Pok&eacute;dex</button>
+            <button class="tab" id="tab-ladder">Ladder</button>
+          </div>
+          <div id="dex-view">
+          <div id="dex-filters">
+            <input id="dex-search" placeholder="Search&hellip;" />
+            <select id="dex-gen">
+              <option value="">Any gen</option>
+              <option value="1">Gen 1</option><option value="2">Gen 2</option>
+              <option value="3">Gen 3</option><option value="4">Gen 4</option>
+              <option value="5">Gen 5</option><option value="6">Gen 6</option>
+              <option value="7">Gen 7</option><option value="8">Gen 8</option>
+              <option value="9">Gen 9</option>
+            </select>
+            <select id="dex-type">
+              <option value="">Any type</option>
+            </select>
+            <select id="dex-evo">
+              <option value="">Any stage</option>
+              <option value="base">Unevolved</option>
+              <option value="middle">Mid-evolution</option>
+              <option value="final">Fully evolved</option>
+            </select>
+          </div>
+          <div id="dex-grid"></div>
+          <div id="dex-pager" class="dex-pager hidden"></div>
+          <div id="dex-detail" class="hidden"></div>
+          </div>
+          <div id="ladder-view" class="hidden">
+            <div class="hint">Win ranked battles to climb. Ratings start at 1000.</div>
+            <div id="ladder-rows"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

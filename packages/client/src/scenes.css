@@ -1,0 +1,196 @@
+/*
+ * Procedural battle scenes — crisp at any resolution (pure gradients, no
+ * photos), themed to match the classic Showdown backdrops, each with a
+ * subtly animated decoration layer (clouds / stars / bubbles / embers).
+ *
+ * The classic low-res jpgs remain available as a fallback:
+ * localStorage.setItem('ss-classic-bg', '1') and reload.
+ */
+
+/* Shared animated decoration layer. */
+#field[class*='scene-']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-repeat: repeat-x;
+}
+
+@keyframes scene-drift {
+  from { background-position-x: 0; }
+  to { background-position-x: 1000px; }
+}
+@keyframes scene-rise {
+  from { background-position-y: 420px; }
+  to { background-position-y: 0; }
+}
+@keyframes scene-twinkle {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.45; }
+}
+
+/* ------------------------------ meadow ------------------------------ */
+#field.scene-meadow {
+  background:
+    radial-gradient(circle 55px at 80% 16%, #fff8d2 0 26px, #ffe98a44 42px, transparent 62px),
+    radial-gradient(ellipse 62% 24% at 12% 62%, #85c268 42%, transparent 72%),
+    radial-gradient(ellipse 70% 26% at 88% 64%, #8fca6d 42%, transparent 72%),
+    linear-gradient(#9adcf2 0%, #c8ecfa 44%, #a5d986 48%, #74b95c 74%, #4f9444 100%);
+}
+#field.scene-meadow::after {
+  background-image:
+    radial-gradient(ellipse 46px 15px at 120px 60px, #ffffffd8 60%, transparent 62%),
+    radial-gradient(ellipse 64px 18px at 165px 70px, #ffffffd8 60%, transparent 62%),
+    radial-gradient(ellipse 40px 13px at 520px 100px, #ffffffb8 60%, transparent 62%),
+    radial-gradient(ellipse 58px 16px at 760px 46px, #ffffffc8 60%, transparent 62%);
+  background-size: 1000px 100%;
+  animation: scene-drift 70s linear infinite;
+}
+
+/* ------------------------------ forest ------------------------------ */
+#field.scene-forest {
+  background:
+    radial-gradient(ellipse 40% 60% at 6% 30%, #1e4d2b88 30%, transparent 70%),
+    radial-gradient(ellipse 42% 62% at 95% 26%, #1e4d2b88 30%, transparent 70%),
+    radial-gradient(circle 70px at 62% 12%, #f2ffd955 0 40px, transparent 70px),
+    radial-gradient(ellipse 120% 40% at 50% 66%, #4c8a4d 40%, transparent 72%),
+    linear-gradient(#7fb96a 0%, #5d9c55 40%, #3f7c43 62%, #2c5e34 100%);
+}
+#field.scene-forest::after {
+  background-image:
+    radial-gradient(circle 3px at 140px 90px, #f6ffbfee 60%, transparent 62%),
+    radial-gradient(circle 2px at 420px 150px, #f6ffbfcc 60%, transparent 62%),
+    radial-gradient(circle 3px at 700px 70px, #f6ffbfee 60%, transparent 62%),
+    radial-gradient(circle 2px at 880px 180px, #f6ffbfcc 60%, transparent 62%);
+  background-size: 1000px 100%;
+  animation: scene-drift 34s linear infinite, scene-twinkle 3.2s ease-in-out infinite;
+}
+
+/* ------------------------------ beach ------------------------------ */
+#field.scene-beach {
+  background:
+    radial-gradient(circle 60px at 18% 14%, #fffbe0 0 30px, #ffec9a44 48px, transparent 66px),
+    linear-gradient(#8fd6f2 0%, #c3ecfb 38%, #57b8d9 42%, #7fd0e8 50%, #f2e2b0 56%, #e8d097 78%, #d9bd82 100%);
+}
+#field.scene-beach::after {
+  background-image:
+    radial-gradient(ellipse 60px 8px at 150px 46%, #ffffff88 60%, transparent 62%),
+    radial-gradient(ellipse 90px 9px at 450px 49%, #ffffff70 60%, transparent 62%),
+    radial-gradient(ellipse 70px 8px at 800px 47%, #ffffff80 60%, transparent 62%);
+  background-size: 1000px 100%;
+  animation: scene-drift 22s linear infinite;
+}
+
+/* ------------------------------ desert ------------------------------ */
+#field.scene-desert {
+  background:
+    radial-gradient(circle 65px at 76% 14%, #fff3c4 0 34px, #ffd98a55 52px, transparent 72px),
+    radial-gradient(ellipse 55% 20% at 20% 58%, #d9a75e 40%, transparent 70%),
+    radial-gradient(ellipse 60% 22% at 85% 60%, #cf9c55 40%, transparent 70%),
+    linear-gradient(#f2c98a 0%, #eec27e 40%, #dfa95f 52%, #c98f4a 78%, #b57c3c 100%);
+}
+#field.scene-desert::after {
+  background-image:
+    radial-gradient(ellipse 90px 6px at 200px 70%, #ffe9bb66 60%, transparent 62%),
+    radial-gradient(ellipse 110px 7px at 600px 78%, #ffe9bb55 60%, transparent 62%),
+    radial-gradient(ellipse 80px 6px at 900px 66%, #ffe9bb66 60%, transparent 62%);
+  background-size: 1000px 100%;
+  animation: scene-drift 16s linear infinite;
+}
+
+/* ------------------------------ ice cave ------------------------------ */
+#field.scene-icecave {
+  background:
+    conic-gradient(from 195deg at 12% 0%, #dff4ff 0 14deg, transparent 15deg),
+    conic-gradient(from 160deg at 78% 0%, #cdeefe 0 12deg, transparent 13deg),
+    radial-gradient(ellipse 70% 30% at 50% 70%, #bfe6f7 30%, transparent 70%),
+    linear-gradient(#7fb4d9 0%, #9fd0ea 40%, #b8e2f4 60%, #8fc4de 100%);
+}
+#field.scene-icecave::after {
+  background-image:
+    radial-gradient(circle 2px at 120px 120px, #ffffffee 60%, transparent 62%),
+    radial-gradient(circle 3px at 380px 60px, #ffffffcc 60%, transparent 62%),
+    radial-gradient(circle 2px at 640px 160px, #ffffffee 60%, transparent 62%),
+    radial-gradient(circle 3px at 900px 90px, #ffffffcc 60%, transparent 62%);
+  background-size: 1000px 100%;
+  animation: scene-drift 48s linear infinite, scene-twinkle 2.4s ease-in-out infinite;
+}
+
+/* ------------------------------ deep sea ------------------------------ */
+#field.scene-deepsea {
+  background:
+    radial-gradient(ellipse 80% 40% at 50% 0%, #2a7ca866 20%, transparent 70%),
+    radial-gradient(ellipse 60% 24% at 30% 72%, #0d3a55 40%, transparent 72%),
+    radial-gradient(ellipse 66% 26% at 78% 76%, #0d3f5c 40%, transparent 72%),
+    linear-gradient(#155f8a 0%, #10496e 45%, #0b3450 75%, #072538 100%);
+}
+#field.scene-deepsea::after {
+  background-image:
+    radial-gradient(circle 4px at 160px 300px, #bfe9ff66 55%, #bfe9ff22 70%, transparent 72%),
+    radial-gradient(circle 3px at 420px 340px, #bfe9ff55 55%, transparent 72%),
+    radial-gradient(circle 5px at 680px 280px, #bfe9ff66 55%, #bfe9ff22 70%, transparent 72%),
+    radial-gradient(circle 3px at 880px 360px, #bfe9ff55 55%, transparent 72%);
+  background-size: 1000px 420px;
+  background-repeat: repeat;
+  animation: scene-rise 9s linear infinite;
+}
+
+/* ------------------------------ night city ------------------------------ */
+#field.scene-nightcity {
+  background:
+    radial-gradient(circle 40px at 82% 14%, #fdf6d8 0 20px, #fdf6d833 34px, transparent 52px),
+    linear-gradient(90deg,
+      transparent 0 6%, #101a2eee 6% 13%, transparent 13% 20%,
+      #0d1626ee 20% 30%, transparent 30% 37%, #121c30ee 37% 45%, transparent 45% 58%,
+      #0d1626ee 58% 67%, transparent 67% 74%, #101a2eee 74% 84%, transparent 84% 92%,
+      #0d1626ee 92% 100%) 0 0 / 100% 62% no-repeat,
+    linear-gradient(#1b2c4d 0%, #24365c 48%, #2c3550 62%, #232838 100%);
+}
+#field.scene-nightcity::after {
+  background-image:
+    radial-gradient(circle 2px at 90px 130px, #ffe9a0dd 60%, transparent 62%),
+    radial-gradient(circle 2px at 230px 170px, #ffe9a0bb 60%, transparent 62%),
+    radial-gradient(circle 2px at 400px 120px, #ffe9a0dd 60%, transparent 62%),
+    radial-gradient(circle 2px at 620px 180px, #ffe9a0bb 60%, transparent 62%),
+    radial-gradient(circle 2px at 810px 140px, #ffe9a0dd 60%, transparent 62%),
+    radial-gradient(circle 1px at 300px 60px, #ffffffcc 60%, transparent 62%),
+    radial-gradient(circle 1px at 700px 40px, #ffffffcc 60%, transparent 62%);
+  background-size: 1000px 100%;
+  animation: scene-twinkle 3.6s ease-in-out infinite;
+}
+
+/* ------------------------------ volcano ------------------------------ */
+#field.scene-volcano {
+  background:
+    radial-gradient(ellipse 60% 26% at 24% 66%, #7a2f1d 40%, transparent 72%),
+    radial-gradient(ellipse 64% 28% at 82% 70%, #6e2a1a 40%, transparent 72%),
+    radial-gradient(ellipse 90% 40% at 50% 100%, #ff7b2c55 20%, transparent 70%),
+    linear-gradient(#4a1f16 0%, #642a1a 42%, #83371f 62%, #5c2415 100%);
+}
+#field.scene-volcano::after {
+  background-image:
+    radial-gradient(circle 3px at 180px 340px, #ffb347ee 55%, #ff7b2c66 72%, transparent 74%),
+    radial-gradient(circle 2px at 430px 380px, #ffb347cc 55%, transparent 74%),
+    radial-gradient(circle 3px at 700px 320px, #ffcf6aee 55%, #ff7b2c66 72%, transparent 74%),
+    radial-gradient(circle 2px at 900px 360px, #ffb347cc 55%, transparent 74%);
+  background-size: 1000px 420px;
+  background-repeat: repeat;
+  animation: scene-rise 6s linear infinite;
+}
+
+/* ------------------------------ sky pillar ------------------------------ */
+#field.scene-sky {
+  background:
+    radial-gradient(ellipse 80% 30% at 50% 78%, #ffffff66 30%, transparent 70%),
+    radial-gradient(ellipse 60% 22% at 20% 84%, #ffffff99 40%, transparent 72%),
+    radial-gradient(ellipse 66% 24% at 82% 88%, #ffffff88 40%, transparent 72%),
+    linear-gradient(#4d9be6 0%, #74b6ef 40%, #a5d3f7 70%, #d3ecfd 100%);
+}
+#field.scene-sky::after {
+  background-image:
+    radial-gradient(ellipse 70px 20px at 140px 200px, #ffffffd8 60%, transparent 62%),
+    radial-gradient(ellipse 95px 24px at 430px 260px, #ffffffc8 60%, transparent 62%),
+    radial-gradient(ellipse 80px 22px at 750px 170px, #ffffffd0 60%, transparent 62%);
+  background-size: 1000px 100%;
+  animation: scene-drift 40s linear infinite;
+}

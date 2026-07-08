@@ -1,0 +1,17 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+*.log
+data.db
+data.db-*
+*.sqlite
+.env
+.env.*
+coverage/
+
+# Runtime player data (accounts, ladder, live battles) — never commit
+packages/server/data/
+
+# Local tooling state
+.claude/settings.local.json

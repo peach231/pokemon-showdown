@@ -1,0 +1,19 @@
+{
+  "name": "@simple-showdown/server",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@simple-showdown/sim": "*",
+    "@simple-showdown/data": "*",
+    "@simple-showdown/protocol": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13"
+  },
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc --build"
+  }
+}

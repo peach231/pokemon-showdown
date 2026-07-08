@@ -1,0 +1,22 @@
+{
+  "name": "@simple-showdown/client",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@fontsource/press-start-2p": "^5.2.7",
+    "@fontsource/vt323": "^5.2.7",
+    "@pkmn/img": "^0.2.30",
+    "@simple-showdown/data": "*",
+    "@simple-showdown/protocol": "*",
+    "@simple-showdown/sim": "*"
+  },
+  "devDependencies": {
+    "vite": "^5.4.11"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  }
+}

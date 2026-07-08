@@ -1,0 +1,27 @@
+{
+  "name": "simple-showdown",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A simplified, web-based, online Pokemon battle simulator inspired by Pokemon Showdown.",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "build:client": "npm run build --workspace @simple-showdown/client",
+    "start": "tsx packages/server/src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --build --dry",
+    "server": "tsx packages/server/src/index.ts",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3",
+    "vitest": "^2.1.8"
+  }
+}

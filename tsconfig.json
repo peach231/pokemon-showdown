@@ -1,0 +1,9 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/sim" },
+    { "path": "packages/data" },
+    { "path": "packages/protocol" },
+    { "path": "packages/server" }
+  ]
+}

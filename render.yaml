@@ -1,0 +1,14 @@
+# Render blueprint: one web service serves the built client + WebSocket game.
+# Connect this repo at https://dashboard.render.com -> New -> Blueprint.
+#
+# NOTE: the free plan has an EPHEMERAL disk — accounts/ladder/battles
+# (packages/server/data/) reset on every deploy or restart. Attach a paid
+# persistent disk at /opt/render/project/src/packages/server/data to keep them.
+services:
+  - type: web
+    name: pokemon-showdown
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build:client
+    startCommand: npm start
+    healthCheckPath: /
