@@ -176,6 +176,8 @@ export function toMoveData(move: PkmnMove): MoveData {
     sideCondition: typeof move.sideCondition === 'string'
       ? move.sideCondition.toLowerCase().replace(/[^a-z]/g, '')
       : undefined,
+    selfDestruct: move.selfdestruct === 'always' ? true : undefined,
+    overrideOffensiveStat: move.overrideOffensiveStat === 'def' ? 'def' : undefined,
   };
 }
 
@@ -213,4 +215,108 @@ export function allItems(): { id: string; name: string; desc: string }[] {
     out.push({ id: item.id, name: item.name, desc: item.shortDesc ?? item.desc ?? '' });
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Battle items the engine actually implements (teambuilder picker + validation)
+// ---------------------------------------------------------------------------
+
+export const BATTLE_ITEMS: { id: string; name: string }[] = [
+  { id: 'leftovers', name: 'Leftovers' },
+  { id: 'blacksludge', name: 'Black Sludge' },
+  { id: 'lifeorb', name: 'Life Orb' },
+  { id: 'choiceband', name: 'Choice Band' },
+  { id: 'choicespecs', name: 'Choice Specs' },
+  { id: 'choicescarf', name: 'Choice Scarf' },
+  { id: 'focussash', name: 'Focus Sash' },
+  { id: 'assaultvest', name: 'Assault Vest' },
+  { id: 'rockyhelmet', name: 'Rocky Helmet' },
+  { id: 'heavydutyboots', name: 'Heavy-Duty Boots' },
+  { id: 'sitrusberry', name: 'Sitrus Berry' },
+  { id: 'lumberry', name: 'Lum Berry' },
+  { id: 'flameorb', name: 'Flame Orb' },
+  { id: 'toxicorb', name: 'Toxic Orb' },
+  { id: 'expertbelt', name: 'Expert Belt' },
+  { id: 'muscleband', name: 'Muscle Band' },
+  { id: 'wiseglasses', name: 'Wise Glasses' },
+  { id: 'eviolite', name: 'Eviolite' },
+  { id: 'lightball', name: 'Light Ball' },
+  { id: 'airballoon', name: 'Air Balloon' },
+  { id: 'weaknesspolicy', name: 'Weakness Policy' },
+  { id: 'powerherb', name: 'Power Herb' },
+  { id: 'charcoal', name: 'Charcoal' },
+  { id: 'mysticwater', name: 'Mystic Water' },
+  { id: 'magnet', name: 'Magnet' },
+  { id: 'miracleseed', name: 'Miracle Seed' },
+  { id: 'nevermeltice', name: 'Never-Melt Ice' },
+  { id: 'blackbelt', name: 'Black Belt' },
+  { id: 'poisonbarb', name: 'Poison Barb' },
+  { id: 'softsand', name: 'Soft Sand' },
+  { id: 'sharpbeak', name: 'Sharp Beak' },
+  { id: 'twistedspoon', name: 'Twisted Spoon' },
+  { id: 'silverpowder', name: 'Silver Powder' },
+  { id: 'hardstone', name: 'Hard Stone' },
+  { id: 'spelltag', name: 'Spell Tag' },
+  { id: 'dragonfang', name: 'Dragon Fang' },
+  { id: 'blackglasses', name: 'Black Glasses' },
+  { id: 'metalcoat', name: 'Metal Coat' },
+  { id: 'fairyfeather', name: 'Fairy Feather' },
+  { id: 'silkscarf', name: 'Silk Scarf' },
+];
+
+export function battleItemName(id: string): string | undefined {
+  return BATTLE_ITEMS.find((i) => i.id === id)?.name;
+}
+
+// ---------------------------------------------------------------------------
+// Real Pokémon Showdown Random Battle sets (nightly data from pkmn/randbats)
+// ---------------------------------------------------------------------------
+import randbats from './gen9randombattle.json';
+
+interface RandbatsRole {
+  abilities?: string[];
+  items?: string[];
+  moves?: string[];
+}
+interface RandbatsEntry {
+  level?: number;
+  abilities?: string[];
+  items?: string[];
+  roles?: Record<string, RandbatsRole>;
+}
+
+export interface ShowdownSet {
+  /** Move ids (normalized), up to 4, sampled from a real PS role. */
+  moves: string[];
+  ability?: string;
+  item?: string;
+  role?: string;
+}
+
+const toMoveID = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * The actual Pokémon Showdown Random Battle set for a species, or null if PS
+ * doesn't include it in its random pool. `rng` in [0,1) picks the role and
+ * samples 4 moves from its movepool.
+ */
+export function getShowdownSet(speciesName: string, rng: () => number = Math.random): ShowdownSet | null {
+  const species = gen.species.get(speciesName);
+  const entry = (randbats as Record<string, RandbatsEntry>)[species?.name ?? speciesName];
+  if (!entry) return null;
+  const roleNames = Object.keys(entry.roles ?? {});
+  const roleName = roleNames.length ? roleNames[Math.floor(rng() * roleNames.length)]! : undefined;
+  const role = roleName ? entry.roles![roleName]! : undefined;
+  const pool = [...(role?.moves ?? [])];
+  const moves: string[] = [];
+  while (moves.length < 4 && pool.length > 0) {
+    moves.push(toMoveID(pool.splice(Math.floor(rng() * pool.length), 1)[0]!));
+  }
+  if (moves.length === 0) return null;
+  return {
+    moves,
+    ability: role?.abilities?.[0] ?? entry.abilities?.[0],
+    item: role?.items?.[0] ?? entry.items?.[0],
+    role: roleName,
+  };
 }

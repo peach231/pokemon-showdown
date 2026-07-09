@@ -89,6 +89,10 @@ export interface MoveData {
   weather?: string;
   /** Side condition this move lays (only 'stealthrock' is implemented). */
   sideCondition?: string;
+  /** User faints after using this move (Explosion, Self-Destruct...). */
+  selfDestruct?: boolean;
+  /** Attack stat override (Body Press attacks with Defense). */
+  overrideOffensiveStat?: 'def';
 }
 
 export type WeatherID = '' | 'raindance' | 'sunnyday' | 'sandstorm' | 'snow';

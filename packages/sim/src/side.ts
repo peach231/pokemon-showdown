@@ -100,12 +100,15 @@ export class Side {
         const active = this.active!;
         const available = active.availableMoves();
         base.active = [{
-          moves: active.moveSlots.map((m) => ({
+          moves: active.moveSlots.map((m, i) => ({
             id: m.id,
             name: m.move.name,
             pp: m.pp,
             maxpp: m.maxpp,
-            disabled: m.disabled || m.pp <= 0 || (available.length === 0 ? false : !available.includes(m)),
+            // Mid-charge (Sky Attack turn 2): locked into the charging move.
+            disabled: active.charging
+              ? i !== active.charging.slotIndex
+              : m.disabled || m.pp <= 0 || (available.length === 0 ? false : !available.includes(m)),
           })),
         }];
         break;
@@ -173,12 +176,15 @@ export class Side {
       }
       const slot = active.moveSlots[moveIndex];
       if (!slot) return { error: `${active.name} doesn't have that move.` };
-      if (active.availableMoves().length === 0) {
+      const usable = active.availableMoves();
+      if (usable.length === 0) {
         // No usable moves: any "move" choice becomes Struggle (index -1 sentinel).
         return { type: 'move', moveIndex: -1 };
       }
       if (slot.pp <= 0) return { error: `${slot.move.name} is out of PP.` };
-      if (slot.disabled) return { error: `${slot.move.name} is disabled.` };
+      if (!usable.includes(slot)) {
+        return { error: `${slot.move.name} can't be used right now.` };
+      }
       return { type: 'move', moveIndex };
     }
 

@@ -48,9 +48,13 @@ export class BattlePokemon {
   readonly level: number;
   readonly stats: StatsTable;
   readonly maxhp: number;
-  readonly types: readonly TypeName[];
+  /** Current types (mutable: Protean/Libero change them mid-battle). */
+  types: TypeName[];
   readonly ability: string;
-  readonly item: string | undefined;
+  /** Held item (display name); empty after consumption. */
+  item: string;
+  /** Normalized item id ('' when none/consumed). */
+  itemId = '';
 
   /** Side id this Pokémon belongs to ('p1' | 'p2'). */
   readonly sideId: 'p1' | 'p2';
@@ -66,6 +70,16 @@ export class BattlePokemon {
   fainted = false;
   /** True once this Pokémon has been sent out at least once. */
   revealed = false;
+  /** Hit by an attack this turn (breaks Focus Punch). Reset each turn. */
+  tookDamageThisTurn = false;
+  /** Two-turn move being charged (Sky Attack, Solar Beam...). */
+  charging: { move: MoveData; slotIndex: number } | null = null;
+  /** Move id a Choice item has locked the holder into ('' = unlocked). */
+  lockedMoveId = '';
+  /** Turns of Slow Start remaining (halved Atk/Spe). */
+  slowStartTurns = 0;
+  /** Truant alternates: true = loafing next action. */
+  loafing = false;
 
   constructor(set: ResolvedPokemonSet, sideId: 'p1' | 'p2', position: number) {
     this.set = set;
@@ -75,9 +89,10 @@ export class BattlePokemon {
     this.stats = calcStats(set.species.baseStats, this.level);
     this.maxhp = this.stats.hp;
     this.hp = this.maxhp;
-    this.types = set.species.types;
+    this.types = [...set.species.types];
     this.ability = set.ability ?? set.species.abilities[0] ?? '';
-    this.item = set.item;
+    this.item = set.item ?? '';
+    this.itemId = this.item.toLowerCase().replace(/[^a-z0-9]/g, '');
     this.sideId = sideId;
     this.position = position;
     this.moveSlots = set.moves.map((move) => ({
@@ -156,6 +171,12 @@ export class BattlePokemon {
   clearOnSwitchOut(): void {
     this.boosts = emptyBoosts();
     this.volatiles.clear();
+    this.charging = null;
+    this.tookDamageThisTurn = false;
+    this.lockedMoveId = ''; // Choice lock releases on switch
+    this.slowStartTurns = 0;
+    this.loafing = false;
+    this.types = [...this.species.types]; // undo Protean/Libero
     // Toxic resets to regular-poison counter on switch (classic behavior keeps
     // tox but restarts the counter).
     if (this.status === 'tox') this.statusState.toxicTurns = 0;
@@ -175,8 +196,19 @@ export class BattlePokemon {
     return prev;
   }
 
-  /** Moves currently selectable (PP left, not disabled). */
+  /** Consume the held item (berries, Focus Sash, popped Air Balloon...). */
+  consumeItem(): void {
+    this.item = '';
+    this.itemId = '';
+  }
+
+  /** Moves currently selectable (PP left, not disabled, item rules). */
   availableMoves(): MoveSlot[] {
-    return this.moveSlots.filter((m) => m.pp > 0 && !m.disabled);
+    return this.moveSlots.filter((m) => {
+      if (m.pp <= 0 || m.disabled) return false;
+      if (this.lockedMoveId && m.id !== this.lockedMoveId) return false; // Choice lock
+      if (this.itemId === 'assaultvest' && m.move.category === 'Status') return false;
+      return true;
+    });
   }
 }

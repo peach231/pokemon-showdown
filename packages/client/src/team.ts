@@ -7,7 +7,9 @@
  * - Persists to localStorage; `serialize()` produces the wire format sent
  *   with lobby create/join (`species~move1+move2,...`).
  */
-import { getSpecies, getMove, legalMoves } from '@simple-showdown/data';
+import {
+  getSpecies, getMove, legalMoves, getShowdownSet, BATTLE_ITEMS,
+} from '@simple-showdown/data';
 import type { SpeciesData, MoveData } from '@simple-showdown/sim';
 import { miniSpriteUrl } from './sprites.js';
 
@@ -17,6 +19,35 @@ const TEAM_SIZE = 6;
 export interface TeamEntry {
   species: string;
   moves: string[];
+  /** Index into species.abilities. */
+  ability?: number;
+  /** Implemented battle-item id. */
+  item?: string;
+}
+
+/**
+ * The real Pokémon Showdown Random Battle set for this species (moves
+ * filtered to the legal learnset), or the scored heuristic when PS doesn't
+ * run the species in its random pool.
+ */
+export function autofillSet(species: SpeciesData, legal: MoveData[]): {
+  moves: string[]; ability?: number; item?: string;
+} {
+  const legalIds = new Set(legal.map((m) => m.id));
+  const showdown = getShowdownSet(species.name);
+  if (showdown) {
+    const moves = showdown.moves.filter((id) => legalIds.has(id));
+    if (moves.length > 0) {
+      const abilityIdx = showdown.ability ? species.abilities.indexOf(showdown.ability) : -1;
+      const itemId = showdown.item ? showdown.item.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+      return {
+        moves: moves.length >= 4 ? moves : [...moves, ...autofillMoves(species, legal).filter((m) => !moves.includes(m))].slice(0, 4),
+        ability: abilityIdx >= 0 ? abilityIdx : undefined,
+        item: BATTLE_ITEMS.some((i) => i.id === itemId) ? itemId : undefined,
+      };
+    }
+  }
+  return { moves: autofillMoves(species, legal) };
 }
 
 /** Pick an intuitive 4: best STAB per type, coverage, then a good status move. */
@@ -90,7 +121,10 @@ export class TeamBox {
       const species = getSpecies(entry.species);
       if (!species) continue;
       const legal = await this.getLegal(species.id);
-      entry.moves = autofillMoves(species, legal);
+      const auto = autofillSet(species, legal);
+      entry.moves = auto.moves;
+      entry.ability ??= auto.ability;
+      entry.item ??= auto.item;
       changed = true;
     }
     if (changed) {
@@ -112,6 +146,8 @@ export class TeamBox {
           this.entries.push({
             species: item.species,
             moves: Array.isArray(item.moves) ? item.moves.filter((m: unknown) => typeof m === 'string').slice(0, 4) : [],
+            ability: typeof item.ability === 'number' ? item.ability : undefined,
+            item: typeof item.item === 'string' ? item.item : undefined,
           });
         }
       }
@@ -129,10 +165,10 @@ export class TeamBox {
     this.closeEditor();
   }
 
-  /** Wire format for /lobby & /botbattle: `species~move1+move2,...` */
+  /** Wire format for /lobby & /botbattle: `species~moves~abilityIdx~itemid,...` */
   serialize(): string {
     return this.entries
-      .map((e) => (e.moves.length ? `${e.species}~${e.moves.join('+')}` : e.species))
+      .map((e) => `${e.species}~${e.moves.join('+')}~${e.ability ?? ''}~${e.item ?? ''}`)
       .join(',');
   }
 
@@ -147,10 +183,13 @@ export class TeamBox {
     this.save();
     this.render();
     const index = this.entries.length - 1;
-    // Auto-fill immediately, then open the editor showing the chosen set.
+    // Auto-fill with the real Showdown set, then open the editor.
     void this.getLegal(species.id).then((legal) => {
       if (!entry.moves.length) {
-        entry.moves = autofillMoves(species, legal);
+        const auto = autofillSet(species, legal);
+        entry.moves = auto.moves;
+        entry.ability = auto.ability;
+        entry.item = auto.item;
         this.save();
       }
       void this.openEditor(index);
@@ -250,6 +289,20 @@ export class TeamBox {
         </span>
       </div>
       <div class="editor-chips" id="ed-chips"></div>
+      <div class="editor-extras">
+        <label>Ability
+          <select id="ed-ability">${species.abilities.map((a, i) =>
+            `<option value="${i}" ${((entry.ability ?? 0) === i) ? 'selected' : ''}>${a}</option>`).join('')}
+          </select>
+        </label>
+        <label>Item
+          <select id="ed-item">
+            <option value="">(none)</option>
+            ${BATTLE_ITEMS.map((it) =>
+              `<option value="${it.id}" ${entry.item === it.id ? 'selected' : ''}>${it.name}</option>`).join('')}
+          </select>
+        </label>
+      </div>
       <input id="ed-search" placeholder="Search ${legal.length} legal moves…" />
       <div class="editor-list" id="ed-list"></div>`;
     this.editorEl.querySelector('.editor-icon')!.innerHTML =
@@ -316,12 +369,24 @@ export class TeamBox {
     };
 
     searchEl.addEventListener('input', renderList);
+    (this.editorEl.querySelector('#ed-ability') as HTMLSelectElement).addEventListener('change', (e) => {
+      entry.ability = parseInt((e.target as HTMLSelectElement).value, 10) || 0;
+      this.save();
+    });
+    (this.editorEl.querySelector('#ed-item') as HTMLSelectElement).addEventListener('change', (e) => {
+      entry.item = (e.target as HTMLSelectElement).value || undefined;
+      this.save();
+    });
     this.editorEl.querySelector('#ed-autofill')!.addEventListener('click', () => {
-      entry.moves = autofillMoves(species, legal);
+      const auto = autofillSet(species, legal);
+      entry.moves = auto.moves;
+      entry.ability = auto.ability;
+      entry.item = auto.item;
       this.save();
       renderChips();
       renderList();
       this.render();
+      void this.openEditor(index); // refresh the selects
     });
     this.editorEl.querySelector('#ed-clear')!.addEventListener('click', () => {
       entry.moves = [];

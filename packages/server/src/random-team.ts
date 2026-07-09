@@ -1,48 +1,55 @@
 /**
  * Team generation for the server.
- * - `generateRandomTeam` — 6 random, fully-evolved, base-forme species.
- * - `generateTeamFromIds` — the player's saved team (species ids from the
- *   client teambuilder), padded with randoms if short; falls back gracefully
- *   on unknown ids.
- * Moves are picked randomly from each species' legal learnset (real move
- * choice UI arrives with the full teambuilder milestone).
+ * - Random teams use REAL Pokémon Showdown Random Battle sets (nightly
+ *   pkmn/randbats data) whenever the species is in PS's random pool —
+ *   moves, ability, and item included; a scored-move heuristic covers
+ *   species PS doesn't run.
+ * - `generateTeamFromSpecs` builds the player's saved team (species, chosen
+ *   moves, ability slot, item id), server-validated, padded with randoms.
  */
-import { filterSpecies, getSpecies, getMove, canLearn, legalMoves } from '@simple-showdown/data';
+import {
+  filterSpecies, getSpecies, getMove, canLearn, legalMoves,
+  getShowdownSet, battleItemName,
+} from '@simple-showdown/data';
 import { PRNG, type ResolvedPokemonSet, type MoveData, type SpeciesData } from '@simple-showdown/sim';
 
-/** A teambuilder slot as sent by the client: species id + chosen move ids. */
+/** A teambuilder slot as sent by the client. */
 export interface TeamSpec {
   id: string;
   moves: string[];
+  /** Index into species.abilities. */
+  ability?: number;
+  /** Implemented battle-item id. */
+  item?: string;
 }
 
-/** Parse the wire format: `id~move1+move2,id2~...` (all ids alphanumeric). */
+/** Parse the wire format: `id~move1+move2~abilityIdx~itemid,...` */
 export function parseTeamSpecs(arg: string): TeamSpec[] {
   return arg.split(',').filter(Boolean).map((entry) => {
-    const [id, moves] = entry.split('~');
-    return { id: id ?? '', moves: (moves ?? '').split('+').filter(Boolean) };
+    const [id, moves, ability, item] = entry.split('~');
+    const abilityIdx = parseInt(ability ?? '', 10);
+    return {
+      id: id ?? '',
+      moves: (moves ?? '').split('+').filter(Boolean),
+      ability: Number.isNaN(abilityIdx) ? undefined : abilityIdx,
+      item: (item ?? '').replace(/[^a-z0-9]/g, '') || undefined,
+    };
   }).filter((s) => s.id);
 }
 
 /**
- * Balance lever: level scales inversely with base stat total, so a Rayquaza
- * (BST 680) fights at ~70 while a Wigglytuff (BST 435) gets high 80s. Same
- * idea as Showdown Random Battle's curated levels, computed from BST instead
- * of hand-tuning 1000+ species. Not a perfect meta — but every pick is usable.
+ * Balance lever: level scales inversely with base stat total (clamped 70-100),
+ * like Showdown Random Battle's level balancing.
  */
 export function balancedLevel(species: SpeciesData): number {
   const s = species.baseStats;
   const bst = s.hp + s.atk + s.def + s.spa + s.spd + s.spe;
-  // Linear: BST 300 -> 100, BST 600 -> 72; clamped to [70, 100].
   const level = Math.round(100 - ((bst - 300) * 28) / 300);
   return Math.max(70, Math.min(100, level));
 }
 
-/** Build one playable set for a species: up to 4 random legal moves. */
-export async function generateRandomSet(
-  prng: PRNG,
-  species: SpeciesData,
-): Promise<ResolvedPokemonSet | null> {
+/** Fallback move picker for species outside PS's random pool. */
+async function heuristicMoves(prng: PRNG, species: SpeciesData): Promise<MoveData[]> {
   const learnable = await legalMoves(species.id);
   const damaging = learnable.filter((m) => m.basePower >= 40);
   const status = learnable.filter((m) => m.category === 'Status');
@@ -59,10 +66,42 @@ export async function generateRandomSet(
   };
   take(damaging);
   take(status);
+  return moves;
+}
+
+/** Build one playable set: real PS randbats set when available. */
+export async function generateRandomSet(
+  prng: PRNG,
+  species: SpeciesData,
+): Promise<ResolvedPokemonSet | null> {
+  const rng = () => prng.random(1_000_000) / 1_000_000;
+  const showdown = getShowdownSet(species.name, rng);
+
+  let moves: MoveData[] = [];
+  let ability: string | undefined;
+  let item: string | undefined;
+
+  if (showdown) {
+    moves = showdown.moves
+      .map((id) => getMove(id))
+      .filter((m): m is MoveData => !!m);
+    if (showdown.ability && species.abilities.includes(showdown.ability)) {
+      ability = showdown.ability;
+    }
+    if (showdown.item) {
+      item = battleItemName(showdown.item.toLowerCase().replace(/[^a-z0-9]/g, ''));
+    }
+  }
+  if (moves.length < 4) {
+    const filler = await heuristicMoves(prng, species);
+    for (const m of filler) {
+      if (moves.length >= 4) break;
+      if (!moves.some((x) => x.id === m.id)) moves.push(m);
+    }
+  }
   if (moves.length === 0) return null;
-  // Random ability from the species' real ability pool (Levitate, Intimidate...).
-  const ability = species.abilities[prng.random(Math.max(1, species.abilities.length))];
-  return { species, moves, level: balancedLevel(species), ability };
+  ability ??= species.abilities[prng.random(Math.max(1, species.abilities.length))];
+  return { species, moves, level: balancedLevel(species), ability, item };
 }
 
 export async function generateRandomTeam(
@@ -86,9 +125,8 @@ export async function generateRandomTeam(
 }
 
 /**
- * Build a team from teambuilder specs. Chosen moves are kept when they're
- * legal for the species; short or empty movesets are padded with random
- * legal moves. Unknown species are skipped; missing slots become randoms.
+ * Build a team from teambuilder specs. Chosen moves/ability/item are kept
+ * when legal; gaps are filled sensibly; missing slots become randoms.
  */
 export async function generateTeamFromSpecs(
   prng: PRNG,
@@ -111,8 +149,8 @@ export async function generateTeamFromSpecs(
       moves.push(move);
     }
     if (moves.length < 4) {
-      const filler = await generateRandomSet(prng, species);
-      for (const move of filler?.moves ?? []) {
+      const filler = await heuristicMoves(prng, species);
+      for (const move of filler) {
         if (moves.length >= 4) break;
         if (!seen.has(move.id)) {
           seen.add(move.id);
@@ -121,8 +159,14 @@ export async function generateTeamFromSpecs(
       }
     }
     if (moves.length === 0) continue;
+
+    const ability = spec.ability !== undefined
+      ? species.abilities[spec.ability] ?? species.abilities[0]
+      : species.abilities[0];
+    const item = spec.item ? battleItemName(spec.item) : undefined;
+
     usedNums.add(species.num);
-    team.push({ species, moves, level: balancedLevel(species) });
+    team.push({ species, moves, level: balancedLevel(species), ability, item });
   }
   if (team.length < size) {
     team.push(...await generateRandomTeam(prng, size - team.length, usedNums));

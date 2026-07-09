@@ -1,13 +1,11 @@
-/** Print the REAL auto-filled sets for top candidates, using the client's
- *  own autofillMoves(), so a zero-effort lineup can be chosen honestly. */
+/** Print the auto-filled sets — now sourced from REAL PS randbats data. */
 import { getSpecies, legalMoves } from '@simple-showdown/data';
-import { autofillMoves } from '../../client/src/team.js';
+import { autofillSet } from '../../client/src/team.js';
 import { balancedLevel } from '../src/random-team.js';
 
 const CANDIDATES = [
-  'Slaking', 'Regigigas', 'Zacian', 'Miraidon', 'Koraidon', 'Eternatus',
-  'Arceus', 'Rayquaza', 'Mewtwo', 'Kyogre', 'Groudon', 'Zekrom',
-  'Ho-Oh', 'Lugia', 'Garchomp', 'Dragapult', 'Ting-Lu', 'Regieleki',
+  'Garchomp', 'Dragapult', 'Kyogre', 'Zacian', 'Great Tusk', 'Kingambit',
+  'Slaking', 'Regigigas', 'Pikachu', 'Ting-Lu', 'Iron Valiant', 'Gholdengo',
 ];
 
 for (const name of CANDIDATES) {
@@ -17,6 +15,8 @@ for (const name of CANDIDATES) {
     continue;
   }
   const legal = await legalMoves(species.id);
-  const set = autofillMoves(species, legal);
-  console.log(`${name} (Lv${balancedLevel(species)}): ${set.join(', ')}`);
+  const set = autofillSet(species, legal);
+  const ability = set.ability !== undefined ? species.abilities[set.ability] : species.abilities[0];
+  console.log(`${name} (Lv${balancedLevel(species)}): [${set.moves.join(', ')}] ` +
+    `ability=${ability} item=${set.item ?? '—'}`);
 }

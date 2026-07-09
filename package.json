@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --build --dry",
     "server": "tsx packages/server/src/index.ts",
+    "update-sets": "curl -s -o packages/data/src/gen9randombattle.json https://pkmn.github.io/randbats/data/gen9randombattle.json",
     "clean": "tsc --build --clean"
   },
   "devDependencies": {

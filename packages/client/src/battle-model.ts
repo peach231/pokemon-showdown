@@ -218,9 +218,18 @@ export class BattleModel {
         const [, ident, reason] = parts;
         const why: Record<string, string> = {
           slp: 'is fast asleep', frz: 'is frozen solid', par: 'is fully paralyzed',
-          flinch: 'flinched',
+          flinch: 'flinched', recharge: 'must recharge', 'Focus Punch': 'lost its focus',
         };
         this.events.onLog(`${nameOf(ident ?? '')} ${why[reason ?? ''] ?? "couldn't move"}!`, 'minor');
+        break;
+      }
+      case '-prepare': {
+        const [, ident, moveName] = parts;
+        this.events.onLog(`${nameOf(ident ?? '')} is charging ${moveName}!`, 'minor');
+        break;
+      }
+      case '-mustrecharge': {
+        this.events.onLog(`${nameOf(parts[1] ?? '')} must recharge next turn!`, 'minor');
         break;
       }
       case '-damage':
@@ -377,6 +386,16 @@ export class BattleModel {
       case '-ability': {
         const [, ident, ability] = parts;
         this.events.onLog(`[${nameOf(ident ?? '')}'s <b>${ability}</b>!]`, 'minor');
+        break;
+      }
+      case '-item': {
+        const [, ident, item] = parts;
+        this.events.onLog(`${nameOf(ident ?? '')} is holding a <b>${item}</b>!`, 'minor');
+        break;
+      }
+      case '-enditem': {
+        const [, ident, item] = parts;
+        this.events.onLog(`${nameOf(ident ?? '')}'s <b>${item}</b> was used up!`, 'minor');
         break;
       }
       case '-message':
