@@ -205,8 +205,12 @@ export async function canLearn(speciesIdOrName: string, moveIdOrName: string): P
   const specie = gen.species.get(speciesIdOrName);
   const move = gen.moves.get(moveIdOrName);
   if (!specie || !move) return false;
+  // Smeargle Sketches literally anything.
+  if (specie.id === 'smeargle') return true;
   const learnset = await gen.learnsets.learnable(specie.id);
-  return !!learnset && move.id in learnset;
+  if (learnset && move.id in learnset) return true;
+  // Trust PS's own Random Battle data over learnset edge cases.
+  return isInShowdownPool(specie.name, move.id);
 }
 
 export function allItems(): { id: string; name: string; desc: string }[] {
@@ -297,8 +301,12 @@ const toMoveID = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /**
  * The actual Pokémon Showdown Random Battle set for a species, or null if PS
- * doesn't include it in its random pool. `rng` in [0,1) picks the role and
- * samples 4 moves from its movepool.
+ * doesn't include it in its random pool. `rng` in [0,1) picks the role.
+ *
+ * Move selection mirrors PS's generator behavior: pools of ≤4 are taken
+ * whole; larger pools are sampled 4 at a time with damaging STAB moves
+ * guaranteed first (PS's own constraint), so core moves like Garchomp's
+ * Earthquake never get randomed away.
  */
 export function getShowdownSet(speciesName: string, rng: () => number = Math.random): ShowdownSet | null {
   const species = gen.species.get(speciesName);
@@ -307,16 +315,44 @@ export function getShowdownSet(speciesName: string, rng: () => number = Math.ran
   const roleNames = Object.keys(entry.roles ?? {});
   const roleName = roleNames.length ? roleNames[Math.floor(rng() * roleNames.length)]! : undefined;
   const role = roleName ? entry.roles![roleName]! : undefined;
-  const pool = [...(role?.moves ?? [])];
-  const moves: string[] = [];
-  while (moves.length < 4 && pool.length > 0) {
-    moves.push(toMoveID(pool.splice(Math.floor(rng() * pool.length), 1)[0]!));
+  const pool = (role?.moves ?? []).map(toMoveID);
+  if (pool.length === 0) return null;
+
+  let moves: string[];
+  if (pool.length <= 4) {
+    moves = [...pool];
+  } else {
+    const speciesTypes = (species?.types ?? []) as string[];
+    const isStabAttack = (id: string) => {
+      const move = gen.moves.get(id);
+      return !!move && move.category !== 'Status' && move.basePower > 0
+        && speciesTypes.includes(move.type);
+    };
+    // Damaging STAB first (all of them, as PS's generator enforces)...
+    const stab = pool.filter(isStabAttack);
+    const rest = pool.filter((id) => !isStabAttack(id));
+    moves = [...stab].slice(0, 4);
+    // ...then random picks from the remainder.
+    while (moves.length < 4 && rest.length > 0) {
+      moves.push(rest.splice(Math.floor(rng() * rest.length), 1)[0]!);
+    }
   }
-  if (moves.length === 0) return null;
+
   return {
     moves,
     ability: role?.abilities?.[0] ?? entry.abilities?.[0],
     item: role?.items?.[0] ?? entry.items?.[0],
     role: roleName,
   };
+}
+
+/** True if PS's Random Battle data includes this move for this species. */
+export function isInShowdownPool(speciesName: string, moveId: string): boolean {
+  const species = gen.species.get(speciesName);
+  const entry = (randbats as Record<string, RandbatsEntry>)[species?.name ?? speciesName];
+  if (!entry) return false;
+  for (const role of Object.values(entry.roles ?? {})) {
+    if (role.moves?.some((m) => toMoveID(m) === moveId)) return true;
+  }
+  return false;
 }

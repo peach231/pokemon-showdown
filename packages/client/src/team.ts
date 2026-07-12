@@ -33,19 +33,18 @@ export interface TeamEntry {
 export function autofillSet(species: SpeciesData, legal: MoveData[]): {
   moves: string[]; ability?: number; item?: string;
 } {
-  const legalIds = new Set(legal.map((m) => m.id));
   const showdown = getShowdownSet(species.name);
-  if (showdown) {
-    const moves = showdown.moves.filter((id) => legalIds.has(id));
-    if (moves.length > 0) {
-      const abilityIdx = showdown.ability ? species.abilities.indexOf(showdown.ability) : -1;
-      const itemId = showdown.item ? showdown.item.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
-      return {
-        moves: moves.length >= 4 ? moves : [...moves, ...autofillMoves(species, legal).filter((m) => !moves.includes(m))].slice(0, 4),
-        ability: abilityIdx >= 0 ? abilityIdx : undefined,
-        item: BATTLE_ITEMS.some((i) => i.id === itemId) ? itemId : undefined,
-      };
-    }
+  if (showdown && showdown.moves.length > 0) {
+    // Trust PS's own data verbatim — it is legal by construction, and the
+    // server re-validates against the same pool.
+    const moves = showdown.moves;
+    const abilityIdx = showdown.ability ? species.abilities.indexOf(showdown.ability) : -1;
+    const itemId = showdown.item ? showdown.item.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+    return {
+      moves: moves.length >= 4 ? moves.slice(0, 4) : [...moves, ...autofillMoves(species, legal).filter((m) => !moves.includes(m))].slice(0, 4),
+      ability: abilityIdx >= 0 ? abilityIdx : undefined,
+      item: BATTLE_ITEMS.some((i) => i.id === itemId) ? itemId : undefined,
+    };
   }
   return { moves: autofillMoves(species, legal) };
 }
