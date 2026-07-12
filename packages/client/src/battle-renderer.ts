@@ -289,6 +289,7 @@ export class BattleRenderer implements BattleEvents {
   onFaint(side: SideID, pokemon: StatSnap): void {
     const slot = this.slotFor(side);
     this.enqueue(async () => {
+      this.updateSleepVisual(slot, false);
       this.playCry(pokemon.species);
       Sound.faint();
       this.sprites[slot].classList.add('fainting');
@@ -483,7 +484,29 @@ export class BattleRenderer implements BattleEvents {
     this.renderStatbar(slot, pokemon, toPct);
   }
 
+  /** Persistent sleep visual: bobbing sprite + floating Z's over the spot. */
+  private updateSleepVisual(slot: Slot, asleep: boolean): void {
+    const img = this.sprites[slot];
+    img.classList.toggle('is-asleep', asleep);
+    const id = `sleep-zzz-${slot}`;
+    const existing = document.getElementById(id);
+    if (asleep && !existing) {
+      const spot = this.spotEl(slot);
+      if (!spot) return;
+      const zzz = document.createElement('div');
+      zzz.id = id;
+      zzz.className = 'sleep-zzz';
+      zzz.innerHTML = '<span>Z</span><span>z</span><span>z</span>';
+      zzz.style.left = `${spot.offsetLeft + 30}px`;
+      zzz.style.top = `${spot.offsetTop - 90}px`;
+      this.fxLayer.appendChild(zzz);
+    } else if (!asleep && existing) {
+      existing.remove();
+    }
+  }
+
   private renderStatbar(slot: Slot, pokemon: StatSnap, pct: number): void {
+    this.updateSleepVisual(slot, pokemon.status === 'slp' && !pokemon.fainted);
     const bar = this.statbars[slot];
     if (pokemon.fainted) {
       bar.classList.add('hidden');

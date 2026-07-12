@@ -453,6 +453,14 @@ main:has(#battle-panel.hidden)::before {
 .avatar-choice.selected { background: var(--poke-yellow); }
 .modal-wide { max-width: 560px; }
 
+/* Team-full replace picker */
+.replace-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.replace-choice {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 10px; font-size: 0.95rem;
+}
+.replace-choice img { image-rendering: pixelated; }
+
 /* Modal fields */
 .modal-field { display: flex; flex-direction: column; gap: 3px; font-size: 1rem; color: var(--ink); }
 .modal-field span { color: var(--muted-ink); }
@@ -603,16 +611,20 @@ main:has(#battle-panel.hidden)::before {
 
 /* ------------------------------ weather ------------------------------ */
 #weather-layer { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+/* Rain: three parallax layers of short falling droplets with a wind slant
+   (discrete streaks, not continuous lines). */
 #weather-layer.weather-rain {
-  background:
-    repeating-linear-gradient(75deg,
-      transparent 0 11px, #cfe9ff88 11px 12px, transparent 12px 23px),
+  background-image:
+    radial-gradient(ellipse 1.6px 13px at 24px 20px, #e8f4ffd8 55%, transparent 60%),
+    radial-gradient(ellipse 1.3px 10px at 70px 48px, #cfe9ff99 55%, transparent 60%),
+    radial-gradient(ellipse 1.1px 8px at 45px 76px, #cfe9ff70 55%, transparent 60%),
     linear-gradient(#28527a22, #28527a33);
-  animation: rain-fall 0.5s linear infinite;
+  background-size: 110px 95px, 90px 85px, 130px 105px, 100% 100%;
+  animation: rain-fall 0.42s linear infinite;
 }
 @keyframes rain-fall {
-  from { background-position: 0 0; }
-  to { background-position: -24px 90px; }
+  from { background-position: 0 0, 0 0, 0 0, 0 0; }
+  to { background-position: -10px 95px, -14px 85px, -8px 105px, 0 0; }
 }
 #weather-layer.weather-sun {
   background:
@@ -757,6 +769,33 @@ main:has(#battle-panel.hidden)::before {
   0%, 100% { filter: brightness(1) drop-shadow(0 6px 5px #00000055); }
   50% { filter: brightness(1.7) saturate(1.6) drop-shadow(0 0 14px #ffffffaa); }
 }
+/* Sleeping: slow breathing bob + drowsy tint while the status lasts */
+.sprite.is-asleep {
+  animation: sleep-bob 2.6s ease-in-out infinite !important;
+  filter: saturate(0.55) brightness(0.85) drop-shadow(0 6px 5px #00000055);
+}
+@keyframes sleep-bob {
+  0%, 100% { margin-top: 0; }
+  50% { margin-top: 6px; }
+}
+.sleep-zzz {
+  position: absolute; pointer-events: none; z-index: 5;
+  font-family: 'Press Start 2P', monospace; color: #dfe9ff;
+  text-shadow: 2px 2px 0 #1f2a44aa;
+}
+.sleep-zzz span {
+  position: absolute; opacity: 0;
+  animation: zzz-float 2.6s ease-out infinite;
+}
+.sleep-zzz span:nth-child(1) { font-size: 0.9rem; animation-delay: 0s; }
+.sleep-zzz span:nth-child(2) { font-size: 0.7rem; left: 12px; animation-delay: 0.85s; }
+.sleep-zzz span:nth-child(3) { font-size: 0.55rem; left: 22px; animation-delay: 1.7s; }
+@keyframes zzz-float {
+  0% { opacity: 0; transform: translate(0, 0); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(14px, -34px); }
+}
+
 /* Status-applied flashes on the victim */
 .sprite.flash-brn { animation: flash-tint 0.45s; --tint: sepia(1) hue-rotate(-28deg) saturate(3); }
 .sprite.flash-par { animation: flash-tint 0.45s; --tint: sepia(1) hue-rotate(15deg) saturate(4) brightness(1.3); }

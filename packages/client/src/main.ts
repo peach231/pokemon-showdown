@@ -12,6 +12,8 @@ import { showModal } from './modal.js';
 import { initAuthUI, getSession } from './auth-ui.js';
 import { initLadderUI } from './ladder-ui.js';
 import { showAvatarPicker, trainerSpriteUrl } from './avatars.js';
+import { miniSpriteUrl } from './sprites.js';
+import { getSpecies } from '@simple-showdown/data';
 
 // Dev (Vite on 5173): game server on :8000. Production: same origin as the page.
 const SERVER_URL = location.port === '5173'
@@ -84,9 +86,39 @@ const ladderUI = initLadderUI({
 initDex({
   onAddToTeam: (species) => {
     const err = teamBox.add(species);
+    if (err === 'full') {
+      showReplacePicker(species);
+      return;
+    }
     lobbyLine(err ?? `${species.name} added to your team.`);
   },
 });
+
+/** Team is full: let the player choose which member the new Pokémon replaces. */
+function showReplacePicker(species: Parameters<typeof teamBox.add>[0]): void {
+  const grid = teamBox.getEntries().map((entry, i) => {
+    const name = getSpecies(entry.species)?.name ?? entry.species;
+    return `<button class="replace-choice" data-idx="${i}" title="Replace ${name}">
+      <img src="${miniSpriteUrl(name)}" alt="${name}" width="48" height="48" loading="lazy" />
+      <span>${name}</span>
+    </button>`;
+  }).join('');
+  const overlay = showModal({
+    title: 'Team full!',
+    bodyHTML: `<p>Who should <b>${species.name}</b> replace?</p>
+      <div class="replace-grid">${grid}</div>`,
+    buttons: [{ label: 'Cancel' }],
+    cardClass: 'modal-wide',
+  });
+  overlay.querySelectorAll('.replace-choice').forEach((el) => {
+    el.addEventListener('click', () => {
+      const idx = parseInt((el as HTMLElement).dataset['idx'] ?? '-1', 10);
+      const err = teamBox.replaceAt(idx, species);
+      lobbyLine(err ?? `${species.name} joined the team.`);
+      overlay.remove();
+    });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Helpers

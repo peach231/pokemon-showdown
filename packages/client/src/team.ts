@@ -171,18 +171,16 @@ export class TeamBox {
       .join(',');
   }
 
-  /** Add a species with an auto-filled moveset; returns an error or null. */
-  add(species: SpeciesData): string | null {
-    if (this.entries.length >= TEAM_SIZE) return 'Your team is full (6 Pokémon).';
-    if (this.entries.some((e) => e.species === species.id)) {
-      return `${species.name} is already on your team.`;
-    }
-    const entry: TeamEntry = { species: species.id, moves: [] };
-    this.entries.push(entry);
-    this.save();
-    this.render();
-    const index = this.entries.length - 1;
-    // Auto-fill with the real Showdown set, then open the editor.
+  getEntries(): readonly TeamEntry[] {
+    return this.entries;
+  }
+
+  get isFull(): boolean {
+    return this.entries.length >= TEAM_SIZE;
+  }
+
+  /** Auto-fill an entry with the real Showdown set, then open its editor. */
+  private autofillAndEdit(entry: TeamEntry, species: SpeciesData, index: number): void {
     void this.getLegal(species.id).then((legal) => {
       if (!entry.moves.length) {
         const auto = autofillSet(species, legal);
@@ -193,6 +191,34 @@ export class TeamBox {
       }
       void this.openEditor(index);
     });
+  }
+
+  /** Add a species with an auto-filled moveset; returns an error or null.
+   *  Returns the sentinel 'full' when all 6 slots are taken. */
+  add(species: SpeciesData): string | null {
+    if (this.entries.some((e) => e.species === species.id)) {
+      return `${species.name} is already on your team.`;
+    }
+    if (this.entries.length >= TEAM_SIZE) return 'full';
+    const entry: TeamEntry = { species: species.id, moves: [] };
+    this.entries.push(entry);
+    this.save();
+    this.render();
+    this.autofillAndEdit(entry, species, this.entries.length - 1);
+    return null;
+  }
+
+  /** Swap the Pokémon in `index` for a new species (auto-filled). */
+  replaceAt(index: number, species: SpeciesData): string | null {
+    if (this.entries.some((e, i) => i !== index && e.species === species.id)) {
+      return `${species.name} is already on your team.`;
+    }
+    if (index < 0 || index >= this.entries.length) return 'Invalid slot.';
+    const entry: TeamEntry = { species: species.id, moves: [] };
+    this.entries[index] = entry;
+    this.save();
+    this.render();
+    this.autofillAndEdit(entry, species, index);
     return null;
   }
 
