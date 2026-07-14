@@ -1,5 +1,5 @@
 import type { TypeName, MoveCategory, WeatherID } from './types.js';
-import { singleTypeEffectiveness, typeEffectiveness } from './typechart.js';
+import { singleMoveEffectiveness, moveEffectiveness } from './typechart.js';
 import type { PRNG } from './prng.js';
 
 export interface DamageInput {
@@ -7,6 +7,8 @@ export interface DamageInput {
   basePower: number;
   category: Exclude<MoveCategory, 'Status'>;
   moveType: TypeName;
+  /** Move id, for per-move effectiveness quirks (e.g. Freeze-Dry vs Water). */
+  moveId?: string;
   /** Effective (already boost-adjusted) attacking stat: atk for Physical, spa for Special. */
   attackStat: number;
   /** Effective (already boost-adjusted) defending stat: def for Physical, spd for Special. */
@@ -55,7 +57,7 @@ export function calculateDamage(input: DamageInput): DamageResult {
   const stabMultiplier = input.stabMultiplier ?? 1.5;
   const critMultiplier = input.critMultiplier ?? 1.5;
 
-  const eff = typeEffectiveness(moveType, defenderTypes);
+  const eff = moveEffectiveness(input.moveId ?? '', moveType, defenderTypes);
   if (eff === 0 || basePower <= 0) {
     return { damage: 0, effectiveness: eff, crit: isCrit };
   }
@@ -88,7 +90,7 @@ export function calculateDamage(input: DamageInput): DamageResult {
 
   // Type effectiveness, applied stepwise with truncation (mirrors the cartridge).
   for (const t of defenderTypes) {
-    const m = singleTypeEffectiveness(moveType, t);
+    const m = singleMoveEffectiveness(input.moveId ?? '', moveType, t);
     if (m === 2) damage *= 2;
     else if (m === 0.5) damage = Math.floor(damage * 0.5);
     // m === 1: no change; m === 0 already returned above.

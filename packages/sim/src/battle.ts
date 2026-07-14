@@ -2,7 +2,7 @@ import { PRNG, type PRNGSeed } from './prng.js';
 import { BattlePokemon, type ResolvedPokemonSet } from './pokemon.js';
 import { Side, type SideID, type Choice, type RequestJSON } from './side.js';
 import { calculateDamage } from './damage.js';
-import { typeEffectiveness } from './typechart.js';
+import { typeEffectiveness, moveEffectiveness } from './typechart.js';
 import { addBoost } from './stats.js';
 import { accuracyBoostMultiplier } from './stats.js';
 import type { MoveData, StatusID, BoostID, TypeName, WeatherID } from './types.js';
@@ -742,7 +742,7 @@ export class Battle {
     }
 
     // Type immunity (fixed-damage and OHKO moves still respect immunity).
-    const eff = isStruggle ? 1 : typeEffectiveness(move.type, defender.types);
+    const eff = isStruggle ? 1 : moveEffectiveness(move.id, move.type, defender.types);
     if (eff === 0) {
       this.add('-immune', defender.activeIdent);
       return 'immune';
@@ -889,6 +889,7 @@ export class Battle {
           basePower,
           category: move.category as 'Physical' | 'Special',
           moveType: move.type,
+          moveId: move.id,
           attackStat,
           defenseStat,
           attackerTypes: isStruggle ? [] : attacker.types,

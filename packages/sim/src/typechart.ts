@@ -43,3 +43,21 @@ export function typeEffectiveness(moveType: TypeName, defenderTypes: readonly Ty
   }
   return mult;
 }
+
+/**
+ * Per-move effectiveness quirks (PS's onEffectiveness handlers).
+ * Freeze-Dry is Ice but always super effective against Water.
+ */
+export function singleMoveEffectiveness(moveId: string, moveType: TypeName, defending: TypeName): number {
+  if (moveId === 'freezedry' && defending === 'Water') return 2;
+  return singleTypeEffectiveness(moveType, defending);
+}
+
+/** `typeEffectiveness`, but honoring per-move quirks like Freeze-Dry. */
+export function moveEffectiveness(moveId: string, moveType: TypeName, defenderTypes: readonly TypeName[]): number {
+  let mult = 1;
+  for (const t of defenderTypes) {
+    mult *= singleMoveEffectiveness(moveId, moveType, t);
+  }
+  return mult;
+}
