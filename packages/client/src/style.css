@@ -253,6 +253,23 @@ main:has(#battle-panel.hidden)::before {
   width: 18px; height: 18px; font-size: 12px; line-height: 14px; text-align: center;
 }
 
+/* Tiny type pills: minimal typing reminder for newer players. */
+.type-mini {
+  display: inline-block; font-style: normal;
+  font-size: 7px; line-height: 1; font-weight: 700;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  color: #fff; padding: 2px 3px; border-radius: 3px;
+  border: 1px solid #1f2a4455;
+}
+.team-slot .slot-types {
+  position: absolute; bottom: -7px; left: 0; right: 0;
+  display: flex; gap: 2px; justify-content: center;
+  pointer-events: none;
+}
+.editor-types { display: inline-flex; gap: 3px; margin-left: 6px; }
+.editor-types .type-mini { font-size: 8px; }
+.slot-types-inline { display: inline-flex; gap: 2px; margin-left: 4px; vertical-align: middle; }
+
 /* Team move editor */
 .team-slot.editing { outline: 3px solid var(--poke-yellow); }
 .team-slot .needs-moves {

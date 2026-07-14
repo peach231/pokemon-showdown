@@ -251,6 +251,11 @@ export class TeamBox {
         icon.height = 48;
         icon.className = 'mini-icon';
         slot.appendChild(icon);
+        const pills = document.createElement('span');
+        pills.className = 'slot-types';
+        pills.innerHTML = species.types.map((t) =>
+          `<i class="type-mini t-${t}" title="${t}">${t.slice(0, 3)}</i>`).join('');
+        slot.appendChild(pills);
         if (!entry.moves.length) {
           const dot = document.createElement('span');
           dot.className = 'needs-moves';
@@ -306,6 +311,8 @@ export class TeamBox {
       <div class="editor-head">
         <span class="editor-icon"></span>
         <span class="editor-name">${species.name}</span>
+        <span class="editor-types">${species.types.map((t) =>
+          `<i class="type-mini t-${t}">${t}</i>`).join('')}</span>
         <span class="editor-actions">
           <button id="ed-autofill" class="primary">Auto-fill</button>
           <button id="ed-clear">Clear</button>

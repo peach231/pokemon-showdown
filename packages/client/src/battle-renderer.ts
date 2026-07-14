@@ -5,7 +5,7 @@ import {
 } from './sprites.js';
 import { Sound } from './sound.js';
 import { trainerSpriteUrl } from './avatars.js';
-import { getMove } from '@simple-showdown/data';
+import { getMove, getSpecies } from '@simple-showdown/data';
 
 const TYPE_COLORS: Record<string, string> = {
   Normal: '#a8a878', Fire: '#f08030', Water: '#6890f0', Grass: '#78c850',
@@ -26,6 +26,14 @@ const STAT_BADGES: Record<string, string> = {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Tiny abbreviated type pills (beginner reminder) for bench/lead buttons. */
+function typePillsHTML(speciesName: string): string {
+  const species = getSpecies(speciesName);
+  if (!species) return '';
+  return `<span class="slot-types-inline">${species.types.map((t) =>
+    `<i class="type-mini t-${t}" title="${t}">${t.slice(0, 3)}</i>`).join('')}</span>`;
 }
 
 /** Hard Game-Boy-style HP thresholds — no smooth hue blending. */
@@ -603,7 +611,7 @@ export class BattleRenderer implements BattleEvents {
       request.side.pokemon.forEach((p, i) => {
         const species = p.details.split(',')[0] ?? p.details;
         const btn = document.createElement('button');
-        btn.innerHTML = `${this.iconHTML(species)} ${species}`;
+        btn.innerHTML = `${this.iconHTML(species)} ${species}${typePillsHTML(species)}`;
         btn.onclick = () => {
           const order = [i + 1, ...request.side.pokemon.map((_, j) => j + 1).filter((n) => n !== i + 1)];
           this.chooseAndLock(`team ${order.join('')}`);
@@ -673,7 +681,7 @@ export class BattleRenderer implements BattleEvents {
       const species = p.details.split(',')[0] ?? p.details;
       const btn = document.createElement('button');
       btn.className = 'switch-btn';
-      btn.innerHTML = `${this.iconHTML(species)} ${species} <span class="pp">${p.condition}</span>`;
+      btn.innerHTML = `${this.iconHTML(species)} ${species}${typePillsHTML(species)} <span class="pp">${p.condition}</span>`;
       btn.onclick = () => this.chooseAndLock(`switch ${n}`);
       row.appendChild(btn);
     }
