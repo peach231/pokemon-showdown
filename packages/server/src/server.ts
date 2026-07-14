@@ -130,7 +130,7 @@ export class GameServer {
             res.end('Game server running. In dev, open the Vite client (port 5173).');
             return;
           }
-          res.writeHead(200, { 'Content-Type': 'text/html' });
+          res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' });
           res.end(index);
         });
         return;

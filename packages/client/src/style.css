@@ -838,6 +838,12 @@ main:has(#battle-panel.hidden)::before {
 /* All four moves on one row: equal columns that shrink instead of wrapping. */
 .menu-row.moves-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .moves-row .move-btn { min-width: 0; overflow: hidden; }
+/* Narrow screens/embeds: compress instead of clipping. */
+@media (max-width: 760px) {
+  .moves-row .move-btn { padding: 6px 5px; font-size: 0.85rem; }
+  .moves-row .move-btn .pp { font-size: 0.7rem; }
+  .moves-row .type-badge { font-size: 0.65rem; }
+}
 .move-btn .pp { display: block; color: var(--muted-ink); font-size: 0.85rem; }
 .move-btn .mv-top { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .move-btn .mv-cat { font-size: 0.85rem; color: var(--muted-ink); }
