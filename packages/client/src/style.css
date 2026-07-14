@@ -835,6 +835,9 @@ main:has(#battle-panel.hidden)::before {
   min-width: 158px; text-align: left;
   border-left-width: 7px; /* colored by move type via inline style */
 }
+/* All four moves on one row: equal columns that shrink instead of wrapping. */
+.menu-row.moves-row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.moves-row .move-btn { min-width: 0; overflow: hidden; }
 .move-btn .pp { display: block; color: var(--muted-ink); font-size: 0.85rem; }
 .move-btn .mv-top { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .move-btn .mv-cat { font-size: 0.85rem; color: var(--muted-ink); }

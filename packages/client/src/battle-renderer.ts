@@ -629,7 +629,7 @@ export class BattleRenderer implements BattleEvents {
 
     if (request.active) {
       const moveRow = document.createElement('div');
-      moveRow.className = 'menu-row';
+      moveRow.className = 'menu-row moves-row';
       request.active[0]?.moves.forEach((m, i) => {
         const data = getMove(m.id);
         const type = data?.type ?? 'Normal';
