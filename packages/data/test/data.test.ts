@@ -17,6 +17,21 @@ describe('species data', () => {
     expect(garchomp!.gen).toBe(4);
   });
 
+  it('includes Rotom-Wash as a playable forme with real Showdown data', async () => {
+    const wash = getSpecies('Rotom-Wash');
+    expect(wash).toBeDefined();
+    expect(wash!.types).toEqual(['Electric', 'Water']);
+    expect(wash!.abilities).toEqual(['Levitate']);
+    // Listed in the dex/teambuilder pool despite being a forme...
+    const pool = filterSpecies({ baseFormesOnly: true, fullyEvolvedOnly: true });
+    expect(pool.some((s) => s.id === 'rotomwash')).toBe(true);
+    // ...but other formes stay excluded.
+    expect(pool.some((s) => s.id === 'rotomheat')).toBe(false);
+    // Inherits base Rotom's learnset plus its own moves.
+    await expect(canLearn('Rotom-Wash', 'Hydro Pump')).resolves.toBe(true);
+    await expect(canLearn('Rotom-Wash', 'Will-O-Wisp')).resolves.toBe(true);
+  });
+
   it('resolves evolution links', () => {
     const gible = getSpecies('Gible');
     expect(gible!.evos).toContain('gabite');

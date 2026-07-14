@@ -99,11 +99,20 @@ export function getSpecies(idOrName: string): SpeciesData | undefined {
   return specie ? toSpeciesData(specie) : undefined;
 }
 
+/**
+ * Alternate formes promoted to full dex entries, exactly as real Showdown
+ * lists them (own types/stats/abilities/sets). Kept as an allowlist so each
+ * addition can be checked for CDN sprite coverage and engine support.
+ */
+export const PLAYABLE_FORMES: ReadonlySet<string> = new Set([
+  'rotomwash',
+]);
+
 /** Filter species by type / introduction generation / evolution stage. */
 export function filterSpecies(filter: SpeciesFilter): SpeciesData[] {
   const out: SpeciesData[] = [];
   for (const specie of gen.species) {
-    if (filter.baseFormesOnly && specie.forme) continue;
+    if (filter.baseFormesOnly && specie.forme && !PLAYABLE_FORMES.has(specie.id)) continue;
     if (filter.types?.length) {
       const types = specie.types as TypeName[];
       if (!filter.types.some((t) => types.includes(t))) continue;

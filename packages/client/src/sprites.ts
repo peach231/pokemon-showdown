@@ -8,15 +8,27 @@
  * the gen5 static set covers all 1025 base species.
  */
 
+import { getSpecies } from '@simple-showdown/data';
+
 const CDN = 'https://play.pokemonshowdown.com';
 
 export function toID(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
+/**
+ * PS sprite filename: base species id, plus a hyphenated forme suffix for
+ * alternate formes (rotom-wash.png, not rotomwash.png).
+ */
+function spriteId(speciesName: string): string {
+  const s = getSpecies(speciesName);
+  if (s?.forme) return `${toID(s.baseSpecies ?? s.name)}-${toID(s.forme)}`;
+  return toID(speciesName);
+}
+
 /** Small static sprite (96px, full coverage): dex grid, team slots, menus. */
 export function miniSpriteUrl(speciesName: string): string {
-  return `${CDN}/sprites/gen5/${toID(speciesName)}.png`;
+  return `${CDN}/sprites/gen5/${spriteId(speciesName)}.png`;
 }
 
 /**
@@ -24,14 +36,16 @@ export function miniSpriteUrl(speciesName: string): string {
  * the newest legendaries, so callers walk this list on img error.
  */
 export function battleSpriteUrls(speciesName: string, view: 'front' | 'back'): string[] {
-  const id = toID(speciesName);
+  const id = spriteId(speciesName);
   return view === 'back'
     ? [`${CDN}/sprites/ani-back/${id}.gif`, `${CDN}/sprites/gen5-back/${id}.png`, `${CDN}/sprites/gen5/${id}.png`]
     : [`${CDN}/sprites/ani/${id}.gif`, `${CDN}/sprites/gen5/${id}.png`];
 }
 
 export function cryUrl(speciesName: string): string {
-  return `${CDN}/audio/cries/${toID(speciesName)}.mp3`;
+  // Formes have no cry files on the CDN; they share the base species' cry.
+  const s = getSpecies(speciesName);
+  return `${CDN}/audio/cries/${toID(s?.baseSpecies ?? speciesName)}.mp3`;
 }
 
 /** Real PS battle backdrops (existence verified against the CDN). */
