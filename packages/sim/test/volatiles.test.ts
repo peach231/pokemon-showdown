@@ -92,10 +92,11 @@ describe('Taunt', () => {
     const foe = battle.sides.p2.active!;
     expect(foe.hasVolatile('taunt')).toBe(true);
 
-    // Now try to use the status move: it must be refused.
-    battle.choose('p1', 'move 1');
-    battle.choose('p2', 'move 1');
-    expect(battle.log.join('\n')).toContain('move: Taunt');
+    // The status move is no longer selectable at all, as in the real client.
+    const err = battle.choose('p2', 'move 1');
+    expect(err).toBeTruthy();
+    // The attacking move still works.
+    expect(battle.choose('p2', 'move 2')).toBeNull();
   });
 });
 

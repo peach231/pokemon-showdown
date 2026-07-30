@@ -95,6 +95,8 @@ export interface MoveData {
   overrideOffensiveStat?: 'def';
   /** Crit stage: 1 = normal, 2 = high-crit (Slash, Stone Edge, Night Slash). */
   critRatio?: number;
+  /** Terrain this move sets (Electric Terrain, Grassy Terrain, ...). */
+  terrain?: string;
   /**
    * The user switches out after this move resolves (U-turn, Volt Switch,
    * Flip Turn, Parting Shot, Teleport, Chilly Reception). 'shedtail' also
@@ -104,6 +106,9 @@ export interface MoveData {
 }
 
 export type WeatherID = '' | 'raindance' | 'sunnyday' | 'sandstorm' | 'snow';
+
+/** Field terrain. Only affects Pokémon standing on the ground. */
+export type TerrainID = '' | 'electricterrain' | 'grassyterrain' | 'mistyterrain' | 'psychicterrain';
 
 export type MoveTarget =
   | 'normal'

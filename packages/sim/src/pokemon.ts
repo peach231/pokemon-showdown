@@ -54,11 +54,21 @@ export class BattlePokemon {
   readonly maxhp: number;
   /** Current types (mutable: Protean/Libero change them mid-battle). */
   types: TypeName[];
-  readonly ability: string;
+  /** Current ability (mutable: Trace copies the foe's on entry). */
+  ability: string;
   /** Held item (display name); empty after consumption. */
   item: string;
   /** Normalized item id ('' when none/consumed). */
   itemId = '';
+  /** Display name of the item, kept for protocol messages after consumption. */
+  itemName = '';
+  /** True once an item has been used up — what Unburden watches for. */
+  itemLost = false;
+
+  /** Stat boosted by Protosynthesis / Quark Drive, if either is active. */
+  boostedStat: Exclude<StatID, 'hp'> | null = null;
+  /** The boost came from Booster Energy, so it outlives the field condition. */
+  boosterFromItem = false;
 
   /** Side id this Pokémon belongs to ('p1' | 'p2'). */
   readonly sideId: 'p1' | 'p2';
@@ -88,6 +98,14 @@ export class BattlePokemon {
   slowStartTurns = 0;
   /** Truant alternates: true = loafing next action. */
   loafing = false;
+  /** Team-mate this Pokémon is disguised as (Illusion), until it takes a hit. */
+  illusionOf: BattlePokemon | null = null;
+  /** Imposter has already copied the opponent. */
+  transformed = false;
+  /** Zero to Hero has unlocked the Hero forme. */
+  heroForme = false;
+  /** Heavy Metal / Light Metal multiplier for weight-based moves. */
+  weightFactor = 1;
 
   constructor(set: ResolvedPokemonSet, sideId: 'p1' | 'p2', position: number) {
     this.set = set;
@@ -101,6 +119,7 @@ export class BattlePokemon {
     this.ability = set.ability ?? set.species.abilities[0] ?? '';
     this.item = set.item ?? '';
     this.itemId = this.item.toLowerCase().replace(/[^a-z0-9]/g, '');
+    this.itemName = this.item;
     this.sideId = sideId;
     this.position = position;
     this.moveSlots = set.moves.map((move) => ({
@@ -183,6 +202,9 @@ export class BattlePokemon {
     this.tookDamageThisTurn = false;
     this.lockedMoveId = ''; // Choice lock releases on switch
     this.lastMoveId = '';   // and so does anything Encore locked in
+    this.boostedStat = null;
+    this.boosterFromItem = false;
+    this.itemLost = false;
     this.slowStartTurns = 0;
     this.loafing = false;
     this.types = [...this.species.types]; // undo Protean/Libero
@@ -207,8 +229,25 @@ export class BattlePokemon {
 
   /** Consume the held item (berries, Focus Sash, popped Air Balloon...). */
   consumeItem(): void {
+    if (this.itemId) {
+      this.lastItemId = this.itemId;
+      this.itemLost = true;
+    }
     this.item = '';
     this.itemId = '';
+  }
+
+  /** Last item consumed — what Harvest and Recycle can bring back. */
+  lastItemId = '';
+
+  /** Highest raw stat, ignoring HP: what the Booster abilities pick. */
+  highestStat(): Exclude<StatID, 'hp'> {
+    const order: Exclude<StatID, 'hp'>[] = ['atk', 'def', 'spa', 'spd', 'spe'];
+    let best = order[0]!;
+    for (const stat of order) {
+      if (this.stats[stat] > this.stats[best]) best = stat;
+    }
+    return best;
   }
 
   /** Moves currently selectable (PP left, not disabled, item rules). */
@@ -216,6 +255,10 @@ export class BattlePokemon {
     return this.moveSlots.filter((m) => {
       if (m.pp <= 0 || m.disabled) return false;
       if (this.lockedMoveId && m.id !== this.lockedMoveId) return false; // Choice lock
+      // Cursed Body / Disable lock out one specific move.
+      if (this.volatiles.get('disable')?.moveId === m.id) return false;
+      // Taunt bars status moves from being selectable at all.
+      if (this.hasVolatile('taunt') && m.move.category === 'Status') return false;
       if (this.itemId === 'assaultvest' && m.move.category === 'Status') return false;
       return true;
     });

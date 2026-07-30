@@ -188,6 +188,9 @@ export function toMoveData(move: PkmnMove): MoveData {
     selfDestruct: move.selfdestruct === 'always' ? true : undefined,
     overrideOffensiveStat: move.overrideOffensiveStat === 'def' ? 'def' : undefined,
     critRatio: typeof move.critRatio === 'number' ? move.critRatio : undefined,
+    terrain: typeof move.terrain === 'string'
+      ? move.terrain.toLowerCase().replace(/[^a-z]/g, '')
+      : undefined,
     // Pivot moves. Without this the whole family (U-turn, Volt Switch, Flip
     // Turn, Parting Shot, Teleport, Chilly Reception, Shed Tail) silently
     // behaved like ordinary moves, because the flag never reached the engine.
