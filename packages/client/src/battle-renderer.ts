@@ -1,7 +1,7 @@
 import type { BattleModel, BattleEvents, RequestData, SideID, StatSnap, HitEffectiveness } from './battle-model.js';
 import {
   miniSpriteUrl, battleSpriteUrls, setSpriteWithFallback,
-  BATTLE_BACKDROPS, backdropUrl,
+  BATTLE_BACKDROPS, backdropUrl, fxUrl,
 } from './sprites.js';
 import { Sound } from './sound.js';
 import { trainerSpriteUrl } from './avatars.js';
@@ -191,7 +191,7 @@ export class BattleRenderer implements BattleEvents {
     const fromY = y - 30;
 
     const ball = document.createElement('img');
-    ball.src = 'https://play.pokemonshowdown.com/fx/pokeball.png';
+    ball.src = fxUrl('pokeball');
     ball.className = 'throw-ball';
     this.fxLayer.appendChild(ball);
     const spin = slot === 'ally' ? 2 : -2;

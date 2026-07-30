@@ -24,6 +24,7 @@ import { createDb } from './db.js';
 import { User } from './user.js';
 import { BattleRoom } from './battle-room.js';
 import { runBot } from './bot.js';
+import { serveAsset } from './asset-proxy.js';
 
 /** How long a disconnected player has to reconnect before forfeiting. */
 const DISCONNECT_MS = Number(process.env['SS_DISCONNECT_MS'] ?? 60_000);
@@ -113,6 +114,9 @@ export class GameServer {
 
   private serveStatic(req: http.IncomingMessage, res: http.ServerResponse): void {
     const urlPath = (req.url ?? '/').split('?')[0] ?? '/';
+    // /cdn/* mirrors the Showdown media CDN on our own origin, so sprites
+    // survive networks that block play.pokemonshowdown.com (see asset-proxy).
+    if (serveAsset(req, res, urlPath)) return;
     // Sanitize: strip any path traversal.
     const safe = path.normalize(urlPath).replace(/^(\.\.[/\\])+/, '').replace(/\\/g, '/');
     let filePath = path.join(CLIENT_DIST, safe === '/' ? 'index.html' : safe);

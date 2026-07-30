@@ -13,7 +13,7 @@
  * gesture handler. We do exactly that on the first pointer/key event, so all
  * synthesized SFX reliably play (this was the "hits are silent" bug).
  */
-import { cryUrl } from './sprites.js';
+import { bgmUrl, cryUrl } from './sprites.js';
 
 interface BgmTrack {
   url: string;
@@ -21,16 +21,16 @@ interface BgmTrack {
   loopEnd: number;
 }
 
-const CDN = 'https://play.pokemonshowdown.com';
-
+// Served through the same-origin /cdn proxy as the sprites, so filtered
+// networks that block play.pokemonshowdown.com still get music.
 const BGM_TRACKS: BgmTrack[] = [
-  { url: `${CDN}/audio/dpp-trainer.mp3`, loopStart: 13440, loopEnd: 96959 },
-  { url: `${CDN}/audio/hgss-johto-trainer.mp3`, loopStart: 23731, loopEnd: 125086 },
-  { url: `${CDN}/audio/bw-trainer.mp3`, loopStart: 14629, loopEnd: 110109 },
-  { url: `${CDN}/audio/bw-rival.mp3`, loopStart: 19180, loopEnd: 57373 },
-  { url: `${CDN}/audio/bw2-rival.mp3`, loopStart: 7152, loopEnd: 68708 },
-  { url: `${CDN}/audio/xy-trainer.mp3`, loopStart: 7802, loopEnd: 82469 },
-  { url: `${CDN}/audio/oras-trainer.mp3`, loopStart: 13579, loopEnd: 91548 },
+  { url: bgmUrl('dpp-trainer.mp3'), loopStart: 13440, loopEnd: 96959 },
+  { url: bgmUrl('hgss-johto-trainer.mp3'), loopStart: 23731, loopEnd: 125086 },
+  { url: bgmUrl('bw-trainer.mp3'), loopStart: 14629, loopEnd: 110109 },
+  { url: bgmUrl('bw-rival.mp3'), loopStart: 19180, loopEnd: 57373 },
+  { url: bgmUrl('bw2-rival.mp3'), loopStart: 7152, loopEnd: 68708 },
+  { url: bgmUrl('xy-trainer.mp3'), loopStart: 7802, loopEnd: 82469 },
+  { url: bgmUrl('oras-trainer.mp3'), loopStart: 13579, loopEnd: 91548 },
 ];
 
 export type HitKind = 'normal' | 'super' | 'resisted';

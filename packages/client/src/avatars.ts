@@ -1,7 +1,6 @@
 /** Trainer avatars from the Showdown sprite set. */
 import { showModal } from './modal.js';
-
-const CDN = 'https://play.pokemonshowdown.com';
+import { trainerAvatarUrl } from './sprites.js';
 
 /** Curated, recognizable trainers (protagonists + champions). */
 export const AVATARS = [
@@ -12,7 +11,7 @@ export const AVATARS = [
 ] as const;
 
 export function trainerSpriteUrl(avatar: string): string {
-  return `${CDN}/sprites/trainers/${avatar || 'red'}.png`;
+  return trainerAvatarUrl(avatar);
 }
 
 export function showAvatarPicker(current: string, onPick: (avatar: string) => void): void {

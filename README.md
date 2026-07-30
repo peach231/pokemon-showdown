@@ -25,6 +25,21 @@ line into sprites, animations, and sound. Replays and spectating fall out of thi
 | `packages/server` | WebSocket server: rooms, auth, matchmaking, ladder, replays (planned). |
 | `packages/client` | Browser client: battle renderer, teambuilder, chat (planned). |
 
+## Assets are served from our own origin
+
+Sprites, trainer avatars, backdrops, cries and BGM all originate on
+`play.pokemonshowdown.com`, but the client never requests that host directly.
+The game server mirrors it under **`/cdn/<upstream path>`**
+(`packages/server/src/asset-proxy.ts`), with an in-memory cache and a strict
+path allowlist.
+
+The reason is filtered networks: school and office web filters classify
+`play.pokemonshowdown.com` as "Games" and block it, which left the game fully
+playable but drawn as a wall of broken-image icons. Same-origin assets are
+reachable by construction — if the page loaded, the proxy loaded. The real CDN
+remains a per-image second try, and anything that still fails renders an inline
+Poké Ball placeholder rather than the browser's broken-image glyph.
+
 ## Getting started
 
 Requires **Node.js >= 18** (`winget install OpenJS.NodeJS.LTS`).

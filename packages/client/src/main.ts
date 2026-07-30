@@ -12,13 +12,17 @@ import { showModal } from './modal.js';
 import { initAuthUI, getSession } from './auth-ui.js';
 import { initLadderUI } from './ladder-ui.js';
 import { showAvatarPicker, trainerSpriteUrl } from './avatars.js';
-import { miniSpriteUrl } from './sprites.js';
+import { miniSpriteUrl, installSpriteFallback } from './sprites.js';
 import { getSpecies } from '@simple-showdown/data';
 
 // Dev (Vite on 5173): game server on :8000. Production: same origin as the page.
 const SERVER_URL = location.port === '5173'
   ? `ws://${location.hostname || 'localhost'}:8000`
   : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`;
+
+// Before anything renders: no image may ever show the browser's broken-image
+// icon, however hostile the network is.
+installSpriteFallback();
 
 // ---------------------------------------------------------------------------
 // DOM handles
