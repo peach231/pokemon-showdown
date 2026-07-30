@@ -127,7 +127,19 @@ export class BattleRenderer implements BattleEvents {
       this.fieldEl.classList.add(this.sceneClass);
     }
     this.setWeatherOverlay('');
+    // Spectators need a way out at any point, not just when the battle ends.
+    if (this.spectating) this.showSpectatorMenu();
     Sound.playBgm();
+  }
+
+  /** The whole menu for a spectator: a caption and a way to leave. */
+  private showSpectatorMenu(): void {
+    this.menuEl.innerHTML = '<span class="menu-label">Spectating — you are not in this battle.</span>';
+    const leave = document.createElement('button');
+    leave.className = 'ghost';
+    leave.textContent = 'Stop watching';
+    leave.onclick = () => this.leaveBattle();
+    this.menuEl.appendChild(leave);
   }
 
   // ------------------------------------------------------------------
@@ -141,6 +153,13 @@ export class BattleRenderer implements BattleEvents {
    * is painted once at the end by syncToModel().
    */
   private catchingUp = false;
+
+  /** Watching someone else's battle: no menus, no choices, no rematch. */
+  private spectating = false;
+
+  setSpectating(on: boolean): void {
+    this.spectating = on;
+  }
 
   /** Begin applying replayed history without animating any of it. */
   beginCatchUp(): void {
@@ -461,7 +480,7 @@ export class BattleRenderer implements BattleEvents {
       banner.textContent = message;
       const row = document.createElement('div');
       row.className = 'menu-row';
-      if (this.model?.mySide) {
+      if (this.model?.mySide && !this.spectating) {
         const rematch = document.createElement('button');
         rematch.className = 'primary';
         rematch.textContent = 'Rematch';
@@ -473,7 +492,7 @@ export class BattleRenderer implements BattleEvents {
         row.appendChild(rematch);
       }
       const back = document.createElement('button');
-      back.textContent = 'Return to lobby';
+      back.textContent = this.spectating ? 'Stop watching' : 'Return to lobby';
       back.onclick = () => this.leaveBattle();
       row.appendChild(back);
       this.menuEl.append(banner, row);
@@ -656,6 +675,11 @@ export class BattleRenderer implements BattleEvents {
 
   private buildMenu(request: RequestData): void {
     this.menuEl.innerHTML = '';
+
+    if (this.spectating) {
+      this.showSpectatorMenu();
+      return;
+    }
 
     if (request.wait) {
       this.menuEl.innerHTML = '<span class="menu-label">Waiting for your opponent…</span>';

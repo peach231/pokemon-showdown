@@ -169,6 +169,7 @@ export class GameServer {
     this.joinRoom(user, LOBBY);
     this.broadcastUserCount();
     user.sendGlobal([this.lobbiesLine()]);
+    user.sendGlobal([this.battlesLine()]);
 
     ws.on('message', (data) => {
       try {
@@ -522,6 +523,27 @@ export class GameServer {
     for (const user of this.users.values()) user.send(frame);
   }
 
+  /** Live battles anyone can drop in on, newest first. */
+  private battlesLine(): string {
+    const list = [...this.battles.values()]
+      .filter((room) => !room.ended && !room.battle.ended)
+      .map((room) => ({
+        id: room.id,
+        p1: room.players.p1.name,
+        p2: room.players.p2.name,
+        turn: room.battle.turn,
+        watchers: room.spectators.size,
+      }))
+      .reverse()
+      .slice(0, 20);
+    return `|battles|${JSON.stringify(list)}`;
+  }
+
+  private broadcastBattles(): void {
+    const frame = serializeServerFrame(GLOBAL_ROOM, [this.battlesLine()]);
+    for (const user of this.users.values()) user.send(frame);
+  }
+
   private removeLobbyOf(user: User): void {
     let changed = false;
     for (const [id, lobby] of this.lobbies) {
@@ -540,7 +562,10 @@ export class GameServer {
   private joinRoom(user: User, roomId: string): void {
     if (this.battles.has(roomId)) {
       const room = this.battles.get(roomId)!;
-      if (!room.sideOf(user)) room.spectators.add(user);
+      if (!room.sideOf(user)) {
+        room.spectators.add(user);
+        this.broadcastBattles();
+      }
       user.rooms.add(roomId);
       user.send(serializeServerFrame(roomId, ['|init|battle', ...room.battle.log]));
       const side = room.sideOf(user);
@@ -569,7 +594,7 @@ export class GameServer {
   private leaveRoom(user: User, roomId: string, silentGone = false): void {
     const battle = this.battles.get(roomId);
     if (battle) {
-      battle.spectators.delete(user);
+      if (battle.spectators.delete(user)) this.broadcastBattles();
       user.rooms.delete(roomId);
       return;
     }
@@ -662,6 +687,7 @@ export class GameServer {
     }
     battle.start();
     this.persistBattle(room);
+    this.broadcastBattles();   // a new match is now watchable
   }
 
   /** Attach protocol handlers (broadcast, bot, timers, ratings) to a room. */
@@ -673,6 +699,7 @@ export class GameServer {
         this.clearTurnTimers(room.id);
         this.reportRatings(room);
         this.unpersistBattle(room.id);
+        this.broadcastBattles();   // drop it from the watch list
       }
     };
     room.battle.onSideUpdate = (side, line) => {

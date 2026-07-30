@@ -220,6 +220,19 @@ main:has(#battle-panel.hidden)::before {
 .lobby-row.mine { background: #fff3c4; }
 .lobby-empty { color: var(--muted-ink); font-style: italic; padding: 8px 2px; }
 
+/* Live battles anyone can drop in on. */
+.watch-head {
+  margin-top: 12px; padding-top: 10px;
+  border-top: 3px dashed var(--poke-navy);
+  font-weight: 700; font-size: 0.95rem; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--muted-ink);
+}
+#battle-list .lobby-row { background: #f2f7ff; }
+#battle-list .lobby-row .host::before { content: '👁 '; }
+#battle-list .lobby-row .pp {
+  display: block; font-weight: 400; font-size: 0.85rem; color: var(--muted-ink);
+}
+
 /* Team boxes */
 #team-boxes { display: flex; gap: 10px; flex-wrap: wrap; }
 .team-slot {

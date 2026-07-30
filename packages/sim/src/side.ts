@@ -176,7 +176,8 @@ export class Side {
       // pivot move — are still allowed, hence the requestState check.
       const active = this.active;
       if (this.requestState === 'move' && active && !active.types.includes('Ghost')
-        && (active.hasVolatile('partiallytrapped') || active.hasVolatile('trapped'))) {
+        && (active.hasVolatile('partiallytrapped') || active.hasVolatile('trapped')
+          || active.hasVolatile('trappedbymove'))) {
         return { error: `${active.name} can't escape!` };
       }
       return { type: 'switch', teamIndex };

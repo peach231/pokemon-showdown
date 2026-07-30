@@ -31,6 +31,8 @@ const usernameEl = document.getElementById('username')!;
 const onlineCountEl = document.getElementById('online-count')!;
 const createLobbyBtn = document.getElementById('create-lobby-btn') as HTMLButtonElement;
 const lobbyListEl = document.getElementById('lobby-list')!;
+const battleListEl = document.getElementById('battle-list')!;
+const watchHeadEl = document.getElementById('watch-head')!;
 const searchStatus = document.getElementById('search-status')!;
 const lobbyLog = document.getElementById('lobby-log')!;
 const lobbyForm = document.getElementById('lobby-chat-form') as HTMLFormElement;
@@ -52,6 +54,8 @@ let myAvatar = localStorage.getItem('ss-avatar') ?? 'red';
 let battleRoomId: string | null = null;
 let battleModel: BattleModel | null = null;
 let iAmHosting = false;
+/** True when the open battle is someone else's that we are spectating. */
+let spectating = false;
 let searching = false;
 const lobbyUsers = new Set<string>();
 
@@ -68,6 +72,8 @@ const renderer = new BattleRenderer({
     if (battleRoomId) connection.send(battleRoomId, '/leave');
     battleRoomId = null;
     battleModel = null;
+    spectating = false;
+    renderer.setSpectating(false);
     Sound.stopBgm();
     battlePanel.classList.add('hidden');
     homePanel.classList.remove('hidden');
@@ -143,8 +149,10 @@ function playBattleWipe(): void {
   setTimeout(() => wipe.remove(), 750);
 }
 
-function enterBattle(roomId: string): void {
+function enterBattle(roomId: string, asSpectator = false): void {
   battleRoomId = roomId;
+  spectating = asSpectator;
+  renderer.setSpectating(asSpectator);
   battleModel = new BattleModel(myName, renderer);
   renderer.attach(battleModel);
   playBattleWipe();
@@ -196,6 +204,31 @@ function renderLobbies(lobbies: { id: string; host: string; avatar?: string }[])
   }
 }
 
+interface LiveBattle { id: string; p1: string; p2: string; turn: number; watchers: number }
+
+/** Battles in progress that anyone can drop in on. */
+function renderBattles(battles: LiveBattle[]): void {
+  // Never offer to spectate a game we are playing in.
+  const others = battles.filter((b) => b.p1 !== myName && b.p2 !== myName);
+  watchHeadEl.classList.toggle('hidden', others.length === 0);
+  battleListEl.innerHTML = '';
+  for (const b of others) {
+    const row = document.createElement('div');
+    row.className = 'lobby-row';
+    row.innerHTML = `
+      <span class="host">
+        <b>${b.p1}</b> vs <b>${b.p2}</b>
+        <span class="pp">turn ${b.turn}${b.watchers ? ` · ${b.watchers} watching` : ''}</span>
+      </span>`;
+    const btn = document.createElement('button');
+    btn.className = 'ghost';
+    btn.textContent = 'Watch';
+    btn.onclick = () => connection.send('', `/join ${b.id}`);
+    row.appendChild(btn);
+    battleListEl.appendChild(row);
+  }
+}
+
 function renderUserlist(): void {
   userlistBtn.textContent = `${lobbyUsers.size} in chat ▾`;
   userlistEl.innerHTML = '';
@@ -235,7 +268,11 @@ connection.onFrame = ({ roomId, lines }) => {
     // player sit through every animation of a match already played.
     const isCatchUp = lines[0] === '|init|battle';
     if (isCatchUp) {
-      enterBattle(roomId);
+      // A frame with no |request| for us means we joined as a spectator: the
+      // server only sends requests to the two players.
+      const watching = !lines.some((l) => l.startsWith('|request|'))
+        && !lines.some((l) => l.startsWith('|title|'));
+      enterBattle(roomId, watching);
       renderer.beginCatchUp();
     }
     for (const line of lines) {
@@ -274,6 +311,12 @@ connection.onFrame = ({ roomId, lines }) => {
       case 'usercount':
         onlineCountEl.innerHTML = `<span class="dot"></span>${parts[1] ?? '?'} online`;
         break;
+      case 'battles': {
+        try {
+          renderBattles(JSON.parse(parts.slice(1).join('|')) as LiveBattle[]);
+        } catch { /* malformed */ }
+        break;
+      }
       case 'lobbies': {
         try {
           const lobbies = JSON.parse(parts.slice(1).join('|'));

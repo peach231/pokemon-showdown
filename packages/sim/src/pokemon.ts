@@ -110,6 +110,10 @@ export class BattlePokemon {
   damageTakenThisTurn: { amount: number; category: 'Physical' | 'Special' } | null = null;
   /** Number of attacks this Pokemon has been struck by (Rage Fist). */
   timesHit = 0;
+  /** Stockpile counter (Stockpile / Spit Up / Swallow). */
+  stockpile = 0;
+  /** Perish Song countdown; 0 = not counting. */
+  perishTurns = 0;
 
   constructor(set: ResolvedPokemonSet, sideId: 'p1' | 'p2', position: number) {
     this.set = set;
@@ -209,6 +213,10 @@ export class BattlePokemon {
     this.boostedStat = null;
     this.boosterFromItem = false;
     this.itemLost = false;
+    this.stockpile = 0;
+    this.perishTurns = 0;
+    this.timesHit = 0;
+    this.damageTakenThisTurn = null;
     this.slowStartTurns = 0;
     this.loafing = false;
     this.types = [...this.species.types]; // undo Protean/Libero
