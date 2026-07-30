@@ -228,20 +228,27 @@ function renderUserlist(): void {
 // Server frame handling
 // ---------------------------------------------------------------------------
 connection.onFrame = ({ roomId, lines }) => {
-  for (const line of lines) {
-    if (roomId && roomId.startsWith('battle-')) {
-      // Always re-init on |init|battle: reconnects to the SAME room replay
-      // the full log, so the view must reset to render it cleanly.
-      if (line === '|init|battle') {
-        enterBattle(roomId);
-      }
+  if (roomId && roomId.startsWith('battle-')) {
+    // A frame that OPENS with |init|battle is a catch-up dump: joining,
+    // spectating or refreshing replays the whole battle so far in one frame.
+    // Apply it silently and land on the present, rather than making the
+    // player sit through every animation of a match already played.
+    const isCatchUp = lines[0] === '|init|battle';
+    if (isCatchUp) {
+      enterBattle(roomId);
+      renderer.beginCatchUp();
+    }
+    for (const line of lines) {
       // Only the room we are actually watching may drive the model. A finished
       // battle still accepts chat, and after a rematch those lines would
       // otherwise land in the new battle's log.
       if (roomId === battleRoomId) battleModel?.receiveLine(line);
-      continue;
     }
+    if (isCatchUp) renderer.endCatchUp();
+    return;
+  }
 
+  for (const line of lines) {
     const parts = parseLine(line, 4);
     switch (parts[0]) {
       case 'updateuser': {

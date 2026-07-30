@@ -98,6 +98,7 @@ export class BattleRenderer implements BattleEvents {
     this.generation++;
     this.queue = [];
     this.running = false;
+    this.catchingUp = false;
     this.shownPct = { ally: 100, foe: 100 };
     this.logEl.innerHTML = '';
     this.menuEl.innerHTML = '<span class="menu-label">Waiting for the battle to start…</span>';
@@ -133,7 +134,30 @@ export class BattleRenderer implements BattleEvents {
   // Queue plumbing
   // ------------------------------------------------------------------
 
+  /**
+   * Silent catch-up mode. Joining or refreshing replays the whole battle log
+   * in one frame; animating it would make the player sit through the entire
+   * match again. While this is set, visual tasks are dropped and the present
+   * is painted once at the end by syncToModel().
+   */
+  private catchingUp = false;
+
+  /** Begin applying replayed history without animating any of it. */
+  beginCatchUp(): void {
+    this.catchingUp = true;
+    this.queue = [];
+  }
+
+  /** Finish catching up and jump straight to the current state of the battle. */
+  endCatchUp(): void {
+    if (!this.catchingUp) return;
+    this.catchingUp = false;
+    this.queue = [];
+    this.syncToModel();
+  }
+
   private enqueue(task: () => Promise<void> | void): void {
+    if (this.catchingUp) return; // replayed history: syncToModel paints it
     const gen = this.generation;
     this.queue.push(async () => {
       if (gen !== this.generation) return; // battle changed; drop stale task
@@ -156,7 +180,9 @@ export class BattleRenderer implements BattleEvents {
 
   onLog(html: string, cls: 'chat' | 'system' | 'major' | 'minor'): void {
     // Chat should be instant; battle narration syncs with the animations.
-    if (cls === 'chat') {
+    // Replayed history is instant too — the scrollback is worth keeping even
+    // though none of its animations are played.
+    if (cls === 'chat' || this.catchingUp) {
       this.appendLog(html, cls);
       return;
     }
@@ -422,9 +448,11 @@ export class BattleRenderer implements BattleEvents {
   }
 
   onEnd(message: string): void {
-    this.enqueue(() => {
+    // Refreshing a finished battle must still land on the result screen, so
+    // this is one of the few things that runs during catch-up.
+    const paint = () => {
       Sound.stopBgm();
-      Sound.victory();
+      if (!this.catchingUp) Sound.victory();
       this.hideTurnTimer();
       this.appendLog(`<b>${message}</b>`, 'major');
       this.menuEl.innerHTML = '';
@@ -449,7 +477,53 @@ export class BattleRenderer implements BattleEvents {
       back.onclick = () => this.leaveBattle();
       row.appendChild(back);
       this.menuEl.append(banner, row);
-    });
+    };
+    if (this.catchingUp) paint();
+    else this.enqueue(paint);
+  }
+
+  /**
+   * Paint the model's CURRENT state directly, with no animation. Used to land
+   * on the present after replaying a battle log (join / refresh / reconnect).
+   */
+  private syncToModel(): void {
+    const model = this.model;
+    if (!model) return;
+    const mySide = model.mySide ?? 'p1';
+
+    for (const slot of ['ally', 'foe'] as Slot[]) {
+      const side: SideID = slot === 'ally' ? mySide : (mySide === 'p1' ? 'p2' : 'p1');
+      const active = model.sides[side].active;
+      const img = this.sprites[slot];
+      if (!active || active.fainted) {
+        // Nobody out on this side yet, or waiting on a replacement.
+        img.className = 'sprite';
+        img.removeAttribute('src');
+        this.statbars[slot].classList.add('hidden');
+        this.shownPct[slot] = 0;
+        this.updateSleepVisual(slot, false);
+        continue;
+      }
+      img.className = 'sprite visible'; // no materialize: it is already out
+      setSpriteWithFallback(img, battleSpriteUrls(active.species, slot === 'ally' ? 'back' : 'front'));
+      const pct = Math.max(0, Math.min(100, (active.hp / (active.maxhp || 1)) * 100));
+      this.shownPct[slot] = pct;
+      this.renderStatbar(slot, { ...active, boosts: { ...active.boosts } }, pct);
+    }
+
+    this.setWeatherOverlay(model.weather);
+
+    // Trainers only stand on the platforms until the first send-out.
+    const underway = !!(model.sides.p1.active || model.sides.p2.active);
+    if (underway) {
+      for (const id of ['trainer-ally', 'trainer-foe']) {
+        document.getElementById(id)?.classList.add('gone');
+      }
+    } else if (model.sides.p1.playerName) {
+      // Pre-lead (team preview). Only once |player| has actually landed —
+      // otherwise both avatars are still blank and default to the same sprite.
+      this.showTrainers();
+    }
   }
 
   // ------------------------------------------------------------------
