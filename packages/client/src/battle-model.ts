@@ -436,7 +436,23 @@ export class BattleModel {
       case 'request': {
         try {
           this.request = JSON.parse(parts.slice(1).join('|')) as RequestData;
-          if (this.request.side?.id) this.mySide = this.request.side.id;
+          const mine = this.request.side;
+          if (mine?.id) {
+            this.mySide = mine.id;
+            // Choosing a lead at team preview REORDERS our team server-side, so
+            // the |poke| lines from before that choice no longer describe the
+            // order we actually play in. request.side.pokemon always does, and
+            // it carries live conditions too, so rebuild our lineup from it.
+            // The opponent's lineup is deliberately left as revealed at preview
+            // — their running order is hidden information.
+            if (mine.pokemon?.length) {
+              this.sides[mine.id].bench = mine.pokemon.map((p) => ({
+                species: parseDetails(p.details).species,
+                fainted: p.condition.endsWith('fnt'),
+              }));
+              this.events.onBench();
+            }
+          }
           this.events.onRequest(this.request);
         } catch { /* malformed request */ }
         break;

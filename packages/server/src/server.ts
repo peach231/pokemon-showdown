@@ -248,10 +248,12 @@ export class GameServer {
         break;
       }
       case 'join':
-        if (arg) this.joinRoom(user, toID(arg));
+        // Battle ids contain hyphens (`battle-simplesingles-3`), which toID
+        // strips — so spectating has to match the raw id before normalising.
+        if (arg) this.joinRoom(user, this.resolveRoomId(arg));
         break;
       case 'leave':
-        this.leaveRoom(user, roomId || toID(arg));
+        this.leaveRoom(user, roomId || this.resolveRoomId(arg));
         break;
       case 'search': {
         if (user.isGuest) {
@@ -362,6 +364,12 @@ export class GameServer {
       default:
         this.errorTo(user, roomId, `Unknown command: /${cmd}`);
     }
+  }
+
+  /** A live battle id as typed, otherwise the normalised chat-room id. */
+  private resolveRoomId(arg: string): string {
+    const raw = arg.trim();
+    return this.battles.has(raw) ? raw : toID(raw);
   }
 
   private errorTo(user: User, roomId: string, message: string): void {

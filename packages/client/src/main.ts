@@ -235,7 +235,10 @@ connection.onFrame = ({ roomId, lines }) => {
       if (line === '|init|battle') {
         enterBattle(roomId);
       }
-      battleModel?.receiveLine(line);
+      // Only the room we are actually watching may drive the model. A finished
+      // battle still accepts chat, and after a rematch those lines would
+      // otherwise land in the new battle's log.
+      if (roomId === battleRoomId) battleModel?.receiveLine(line);
       continue;
     }
 
