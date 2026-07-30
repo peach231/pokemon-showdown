@@ -35,7 +35,11 @@ export interface VolatileState {
   turns?: number;
   /** Substitute's remaining HP. */
   hp?: number;
-  [key: string]: number | undefined;
+  /** Binding Band doubles binding-move chip damage. */
+  bindingBand?: boolean;
+  /** Move id Encore locks the target into. */
+  moveId?: string;
+  [key: string]: number | string | boolean | undefined;
 }
 
 export const DEFAULT_LEVEL = 100;
@@ -76,6 +80,10 @@ export class BattlePokemon {
   charging: { move: MoveData; slotIndex: number } | null = null;
   /** Move id a Choice item has locked the holder into ('' = unlocked). */
   lockedMoveId = '';
+  /** Last move this Pokémon actually used — what Encore locks it into. */
+  lastMoveId = '';
+  /** Came in this turn: what Stakeout punishes. Cleared in the residual phase. */
+  switchedInThisTurn = false;
   /** Turns of Slow Start remaining (halved Atk/Spe). */
   slowStartTurns = 0;
   /** Truant alternates: true = loafing next action. */
@@ -174,6 +182,7 @@ export class BattlePokemon {
     this.charging = null;
     this.tookDamageThisTurn = false;
     this.lockedMoveId = ''; // Choice lock releases on switch
+    this.lastMoveId = '';   // and so does anything Encore locked in
     this.slowStartTurns = 0;
     this.loafing = false;
     this.types = [...this.species.types]; // undo Protean/Libero

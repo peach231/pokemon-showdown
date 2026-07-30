@@ -162,6 +162,14 @@ export class Side {
       if (!target) return { error: `You don't have a Pokémon in slot ${teamIndex + 1}.` };
       if (target.fainted) return { error: `${target.name} has fainted and can't battle.` };
       if (teamIndex === this.activeIndex) return { error: `${target.name} is already in battle.` };
+      // Binding moves (Infestation, Whirlpool, ...) stop a voluntary switch.
+      // Forced switches — replacing a fainted Pokémon, or a pivot move — are
+      // still allowed, hence the requestState check.
+      const active = this.active;
+      if (this.requestState === 'move' && active?.hasVolatile('partiallytrapped')
+        && !active.types.includes('Ghost')) {
+        return { error: `${active.name} can't escape!` };
+      }
       return { type: 'switch', teamIndex };
     }
 

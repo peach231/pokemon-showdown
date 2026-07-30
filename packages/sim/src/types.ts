@@ -93,6 +93,14 @@ export interface MoveData {
   selfDestruct?: boolean;
   /** Attack stat override (Body Press attacks with Defense). */
   overrideOffensiveStat?: 'def';
+  /** Crit stage: 1 = normal, 2 = high-crit (Slash, Stone Edge, Night Slash). */
+  critRatio?: number;
+  /**
+   * The user switches out after this move resolves (U-turn, Volt Switch,
+   * Flip Turn, Parting Shot, Teleport, Chilly Reception). 'shedtail' also
+   * leaves a Substitute behind for the incoming Pokémon.
+   */
+  selfSwitch?: boolean | 'shedtail';
 }
 
 export type WeatherID = '' | 'raindance' | 'sunnyday' | 'sandstorm' | 'snow';
