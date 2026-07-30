@@ -41,10 +41,19 @@ export class Side {
   activeIndex = -1;
   /** The player's submitted choice for the current request (null = undecided). */
   choice: Choice | null = null;
-  /** Entry hazards etc. on this side's field (currently just 'stealthrock'). */
-  readonly sideConditions = new Set<string>();
+  /**
+   * Field conditions on THIS side: entry hazards (with layer counts) and
+   * screens (with turn counters).
+   */
+  readonly sideConditions = new Map<string, { layers?: number; turns?: number }>();
   /** What kind of decision this side owes right now. */
   requestState: 'teampreview' | 'move' | 'switch' | 'wait' = 'wait';
+  /** Turns until a pending Wish lands (0 = none). */
+  wishTurns = 0;
+  /** HP the pending Wish will restore. */
+  wishHp = 0;
+  /** A Healing Wish is waiting for the next Pokemon to come in. */
+  healingWish = false;
 
   constructor(id: SideID, name: string, team: ResolvedPokemonSet[]) {
     this.id = id;

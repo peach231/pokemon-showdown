@@ -169,7 +169,12 @@ export function toMoveData(move: PkmnMove): MoveData {
     status: toStatus(move.status),
     volatileStatus: typeof move.volatileStatus === 'string' ? move.volatileStatus : undefined,
     boosts: (move.boosts ?? undefined) as MoveData['boosts'],
-    self: move.self?.boosts ? { boosts: move.self.boosts as NonNullable<MoveData['self']>['boosts'] } : undefined,
+    self: (move.self?.boosts || move.self?.volatileStatus)
+      ? {
+        boosts: move.self.boosts as NonNullable<MoveData['self']>['boosts'],
+        volatileStatus: typeof move.self.volatileStatus === 'string' ? move.self.volatileStatus : undefined,
+      }
+      : undefined,
     secondaries: secondaries.length ? secondaries : undefined,
     drain: move.drain ? [move.drain[0]!, move.drain[1]!] : undefined,
     recoil: move.recoil ? [move.recoil[0]!, move.recoil[1]!] : undefined,
@@ -188,6 +193,7 @@ export function toMoveData(move: PkmnMove): MoveData {
     selfDestruct: move.selfdestruct === 'always' ? true : undefined,
     overrideOffensiveStat: move.overrideOffensiveStat === 'def' ? 'def' : undefined,
     critRatio: typeof move.critRatio === 'number' ? move.critRatio : undefined,
+    forceSwitch: move.forceSwitch ? true : undefined,
     terrain: typeof move.terrain === 'string'
       ? move.terrain.toLowerCase().replace(/[^a-z]/g, '')
       : undefined,

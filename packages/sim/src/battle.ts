@@ -3,7 +3,7 @@ import { BattlePokemon, type ResolvedPokemonSet } from './pokemon.js';
 import { Side, type SideID, type Choice, type RequestJSON } from './side.js';
 import { calculateDamage } from './damage.js';
 import { typeEffectiveness, moveEffectiveness } from './typechart.js';
-import { addBoost } from './stats.js';
+import { addBoost, emptyBoosts } from './stats.js';
 import { accuracyBoostMultiplier } from './stats.js';
 import type { MoveData, StatusID, BoostID, BoostsTable, TypeName, WeatherID, TerrainID } from './types.js';
 
@@ -33,6 +33,25 @@ const CODED_TARGET_BOOSTS: Record<string, Partial<BoostsTable>> = {
 /** -ate abilities: Normal moves become another type and gain 20%. */
 const ATE_ABILITIES: Record<string, TypeName> = {
   Pixilate: 'Fairy', Refrigerate: 'Ice', Aerilate: 'Flying', Galvanize: 'Electric',
+};
+
+/**
+ * Signature items that boost two types for one species line, the way the
+ * orbs/crystals/masks do in the real games.
+ */
+const SIGNATURE_ITEMS: Record<string, { species: string[]; types: TypeName[]; mult: number }> = {
+  adamantcrystal: { species: ['dialga', 'dialgaorigin'], types: ['Dragon', 'Steel'], mult: 1.2 },
+  lustrousglobe: { species: ['palkia', 'palkiaorigin'], types: ['Dragon', 'Water'], mult: 1.2 },
+  griseouscore: { species: ['giratina', 'giratinaorigin'], types: ['Dragon', 'Ghost'], mult: 1.2 },
+  adamantorb: { species: ['dialga'], types: ['Dragon', 'Steel'], mult: 1.2 },
+  lustrousorb: { species: ['palkia'], types: ['Dragon', 'Water'], mult: 1.2 },
+  griseousorb: { species: ['giratina'], types: ['Dragon', 'Ghost'], mult: 1.2 },
+  souldew: { species: ['latios', 'latias'], types: ['Dragon', 'Psychic'], mult: 1.2 },
+  rustedsword: { species: ['zacian', 'zaciancrowned'], types: ['Steel'], mult: 1.2 },
+  rustedshield: { species: ['zamazenta', 'zamazentacrowned'], types: ['Steel'], mult: 1.2 },
+  wellspringmask: { species: ['ogerponwellspring'], types: ['Grass', 'Water'], mult: 1.2 },
+  hearthflamemask: { species: ['ogerponhearthflame'], types: ['Grass', 'Fire'], mult: 1.2 },
+  cornerstonemask: { species: ['ogerponcornerstone'], types: ['Grass', 'Rock'], mult: 1.2 },
 };
 
 /** Abilities that boost one attacking type. */
@@ -448,6 +467,7 @@ export class Battle {
       const pokemon = side.active!;
       const choice = side.choice!;
       pokemon.tookDamageThisTurn = false;
+      pokemon.damageTakenThisTurn = null;
       let priority = 0;
       if (choice.type === 'switch') {
         priority = 100; // switches always resolve before moves
@@ -468,6 +488,13 @@ export class Battle {
         // Gale Wings: Flying moves get priority at full HP.
         if (hasAbility(pokemon, 'Gale Wings') && move.type === 'Flying'
           && pokemon.hp === pokemon.maxhp) priority += 1;
+        // Custap Berry pushes its holder ahead when it is nearly down.
+        if (pokemon.itemId === 'custapberry' && pokemon.hp <= Math.floor(pokemon.maxhp / 4)
+          && !this.berriesSuppressed(pokemon)) {
+          pokemon.consumeItem();
+          this.add('-enditem', pokemon.activeIdent, 'Custap Berry');
+          priority += 0.1;
+        }
         // Stall / Mycelium Might always move last within their bracket.
         if (hasAbility(pokemon, 'Stall')) priority -= 1;
         if (move.category === 'Status' && hasAbility(pokemon, 'Mycelium Might')) priority -= 1;
@@ -482,8 +509,12 @@ export class Battle {
       });
     }
 
+    // Trick Room reverses the speed order (priority brackets are unaffected).
+    const speedSign = this.trickRoomTurns > 0 ? -1 : 1;
     actions.sort((a, b) =>
-      (b.priority - a.priority) || (b.speed - a.speed) || (a.tieBreak - b.tieBreak));
+      (b.priority - a.priority)
+      || speedSign * (b.speed - a.speed)
+      || (a.tieBreak - b.tieBreak));
 
     this.pendingActions = actions;
     this.resolveActions();
@@ -573,6 +604,8 @@ export class Battle {
     const weatherAbility = WEATHER_SPEED[pokemon.ability];
     if (weatherAbility && this.weather === weatherAbility) spe *= 2;
     if (pokemon.itemId === 'choicescarf') spe = Math.floor(spe * 1.5);
+    const side = pokemon.sideId === 'p1' ? this.sides.p1 : this.sides.p2;
+    if (side.sideConditions.has('tailwind')) spe *= 2;
     if (hasAbility(pokemon, 'Surge Surfer') && this.terrain === 'electricterrain') spe *= 2;
     if (hasAbility(pokemon, 'Unburden') && pokemon.itemLost) spe *= 2;
     if (pokemon.boostedStat === 'spe') spe = Math.floor(spe * 1.5);
@@ -623,25 +656,15 @@ export class Battle {
       this.add('-start', incoming.activeIdent, 'Substitute');
     }
 
-    // Entry hazards (Heavy-Duty Boots and Magic Guard ignore them).
-    if (side.sideConditions.has('stealthrock')
-      && incoming.itemId !== 'heavydutyboots' && !guardsIndirect(incoming)) {
-      const eff = typeEffectiveness('Rock', incoming.types);
-      const damage = Math.max(1, Math.floor((incoming.maxhp * eff) / 8));
-      incoming.damage(damage);
-      this.add('-damage', incoming.activeIdent, incoming.condition, '[from] Stealth Rock');
-      this.checkFaint(incoming);
-    }
-    // Toxic Spikes poison a grounded arrival (Poison types soak them up).
-    if (side.sideConditions.has('toxicspikes') && isGrounded(incoming) && !incoming.fainted) {
-      if (incoming.types.includes('Poison')) {
-        side.sideConditions.delete('toxicspikes');
-        this.add('-sideend', `${side.id}: ${side.name}`, 'move: Toxic Spikes');
-      } else if (!incoming.types.includes('Steel')) {
-        this.trySetStatus(incoming, 'psn', true);
-      }
+    // A Healing Wish restores whoever arrives next.
+    if (side.healingWish) {
+      side.healingWish = false;
+      incoming.heal(incoming.maxhp);
+      incoming.cureStatus();
+      this.add('-heal', incoming.activeIdent, incoming.condition, '[from] move: Healing Wish');
     }
 
+    this.applyEntryHazards(side, incoming);
     if (incoming.fainted) return;
 
     if (!deferEntry) this.applyEntryAbilities(side);
@@ -759,6 +782,260 @@ export class Battle {
     }
   }
 
+  /** Every entry hazard, in the order the games apply them. */
+  private applyEntryHazards(side: Side, incoming: BattlePokemon): void {
+    // Heavy-Duty Boots ignores the lot; Magic Guard ignores the damage.
+    const boots = incoming.itemId === 'heavydutyboots';
+    if (boots) return;
+
+    if (side.sideConditions.has('stealthrock') && !guardsIndirect(incoming)) {
+      const eff = typeEffectiveness('Rock', incoming.types);
+      incoming.damage(Math.max(1, Math.floor((incoming.maxhp * eff) / 8)));
+      this.add('-damage', incoming.activeIdent, incoming.condition, '[from] Stealth Rock');
+      this.checkFaint(incoming);
+      if (incoming.fainted) return;
+    }
+
+    if (!isGrounded(incoming)) return; // the rest only affect grounded arrivals
+
+    const spikes = side.sideConditions.get('spikes');
+    if (spikes && !guardsIndirect(incoming)) {
+      const layers = Math.min(3, spikes.layers ?? 1);
+      const denom = layers === 1 ? 8 : layers === 2 ? 6 : 4;
+      incoming.damage(Math.max(1, Math.floor(incoming.maxhp / denom)));
+      this.add('-damage', incoming.activeIdent, incoming.condition, '[from] Spikes');
+      this.checkFaint(incoming);
+      if (incoming.fainted) return;
+    }
+
+    const tspikes = side.sideConditions.get('toxicspikes');
+    if (tspikes) {
+      if (incoming.types.includes('Poison')) {
+        // A grounded Poison type absorbs them.
+        side.sideConditions.delete('toxicspikes');
+        this.add('-sideend', `${side.id}: ${side.name}`, 'move: Toxic Spikes');
+      } else if (!incoming.types.includes('Steel')) {
+        this.trySetStatus(incoming, (tspikes.layers ?? 1) >= 2 ? 'tox' : 'psn', true);
+      }
+    }
+
+    if (side.sideConditions.has('stickyweb')) {
+      this.add('-activate', incoming.activeIdent, 'move: Sticky Web');
+      this.applyBoosts(incoming, { spe: -1 });
+    }
+  }
+
+  /**
+   * Status moves with no declarative data in the dex at all. Returns true if
+   * handled. Recovery is the big one: Rest, Synthesis, Moonlight, Morning Sun
+   * and Shore Up carry NOTHING, so they used to simply fail.
+   */
+  private runCodedStatusMove(
+    move: MoveData, attacker: BattlePokemon, defender: BattlePokemon, ownSide: Side, foeSide: Side,
+  ): boolean {
+    /** Weather-sensitive recovery: 2/3 in sun, 1/4 in any other weather. */
+    const weatherHeal = (): number => {
+      const w = this.effectiveWeather;
+      if (w === 'sunnyday') return 2 / 3;
+      if (w === '') return 0.5;
+      return 0.25;
+    };
+    const healSelf = (fraction: number): boolean => {
+      if (attacker.heal(Math.floor(attacker.maxhp * fraction)) > 0) {
+        this.add('-heal', attacker.activeIdent, attacker.condition);
+      } else {
+        this.add('-fail', attacker.activeIdent);
+      }
+      return true;
+    };
+
+    switch (move.id) {
+      case 'rest': {
+        if (attacker.hp === attacker.maxhp || attacker.status === 'slp') {
+          this.add('-fail', attacker.activeIdent);
+          return true;
+        }
+        attacker.cureStatus();
+        attacker.setStatus('slp', { sleepTurns: 2 });
+        attacker.heal(attacker.maxhp);
+        this.add('-status', attacker.activeIdent, 'slp', '[from] move: Rest');
+        this.add('-heal', attacker.activeIdent, attacker.condition, '[silent]');
+        return true;
+      }
+      case 'moonlight': case 'synthesis': case 'morningsun':
+        return healSelf(weatherHeal());
+      case 'shoreup':
+        return healSelf(this.effectiveWeather === 'sandstorm' ? 2 / 3 : 0.5);
+      case 'strengthsap': {
+        // Heal by the target's Attack stat, then drop it.
+        if (attacker.heal(defender.getStat('atk')) > 0) {
+          this.add('-heal', attacker.activeIdent, attacker.condition);
+        }
+        this.applyBoosts(defender, { atk: -1 }, attacker);
+        return true;
+      }
+      case 'painsplit': {
+        const each = Math.floor((attacker.hp + defender.hp) / 2);
+        for (const p of [attacker, defender]) {
+          const target = Math.min(p.maxhp, each);
+          if (target > p.hp) p.heal(target - p.hp);
+          else p.damage(p.hp - target);
+          this.add('-sethp', p.activeIdent, p.condition, '[from] move: Pain Split');
+        }
+        this.checkFaint(defender, attacker);
+        this.checkFaint(attacker);
+        return true;
+      }
+      case 'haze': {
+        for (const p of [attacker, defender]) p.boosts = emptyBoosts();
+        this.add('-clearallboost');
+        return true;
+      }
+      case 'healbell': case 'aromatherapy': {
+        let cured = false;
+        for (const p of ownSide.team) {
+          if (p.status && !p.fainted) { p.cureStatus(); cured = true; }
+        }
+        if (cured) this.add('-activate', attacker.activeIdent, `move: ${move.name}`);
+        else this.add('-fail', attacker.activeIdent);
+        return true;
+      }
+      case 'bellydrum': {
+        const cost = Math.floor(attacker.maxhp / 2);
+        if (attacker.hp <= cost || attacker.boosts.atk >= 6) {
+          this.add('-fail', attacker.activeIdent);
+          return true;
+        }
+        attacker.damage(cost);
+        this.add('-damage', attacker.activeIdent, attacker.condition);
+        attacker.boosts.atk = 6;
+        this.add('-setboost', attacker.activeIdent, 'atk', 6, '[from] move: Belly Drum');
+        return true;
+      }
+      case 'takeheart': {
+        attacker.cureStatus();
+        this.applyBoosts(attacker, { spa: 1, spd: 1 });
+        return true;
+      }
+      case 'trick': case 'switcheroo': {
+        if (hasAbility(defender, 'Sticky Hold') || (!attacker.itemId && !defender.itemId)) {
+          this.add('-fail', attacker.activeIdent);
+          return true;
+        }
+        const mine = { id: attacker.itemId, name: attacker.itemName };
+        const theirs = { id: defender.itemId, name: defender.itemName };
+        attacker.item = theirs.name; attacker.itemId = theirs.id; attacker.itemName = theirs.name;
+        defender.item = mine.name; defender.itemId = mine.id; defender.itemName = mine.name;
+        // A swapped-in Choice item re-locks from scratch.
+        attacker.lockedMoveId = '';
+        defender.lockedMoveId = '';
+        this.add('-activate', attacker.activeIdent, `move: ${move.name}`);
+        if (theirs.id) this.add('-item', attacker.activeIdent, theirs.name);
+        if (mine.id) this.add('-item', defender.activeIdent, mine.name);
+        return true;
+      }
+      case 'wish': {
+        if (ownSide.wishTurns > 0) { this.add('-fail', attacker.activeIdent); return true; }
+        ownSide.wishTurns = 2;
+        ownSide.wishHp = Math.floor(attacker.maxhp / 2);
+        this.add('-activate', attacker.activeIdent, 'move: Wish');
+        return true;
+      }
+      case 'healingwish': case 'lunardance': {
+        ownSide.healingWish = true;
+        attacker.damage(attacker.hp);
+        this.checkFaint(attacker);
+        return true;
+      }
+      case 'revivalblessing': {
+        const dead = ownSide.team.find((p) => p.fainted);
+        if (!dead) { this.add('-fail', attacker.activeIdent); return true; }
+        dead.fainted = false;
+        dead.hp = Math.floor(dead.maxhp / 2);
+        dead.removeVolatile('faintemitted');
+        this.add('-activate', attacker.activeIdent, 'move: Revival Blessing');
+        return true;
+      }
+      case 'transform': {
+        if (attacker.transformed || defender.fainted) {
+          this.add('-fail', attacker.activeIdent);
+          return true;
+        }
+        attacker.transformed = true;
+        attacker.types = [...defender.types];
+        attacker.boosts = { ...defender.boosts };
+        attacker.ability = defender.ability;
+        attacker.moveSlots = defender.moveSlots.map((m) => ({ ...m, pp: Math.min(5, m.pp), maxpp: 5 }));
+        this.add('-transform', attacker.activeIdent, defender.activeIdent);
+        return true;
+      }
+      case 'sleeptalk': {
+        if (attacker.status !== 'slp') { this.add('-fail', attacker.activeIdent); return true; }
+        const usable = attacker.moveSlots.filter((m) => m.id !== 'sleeptalk' && m.pp > 0);
+        if (!usable.length) { this.add('-fail', attacker.activeIdent); return true; }
+        this.executeCopiedMove(attacker, defender, usable[this.prng.random(usable.length)]!.move);
+        return true;
+      }
+      default:
+        return false;
+    }
+  }
+
+  private static readonly HAZARD_IDS = ['stealthrock', 'spikes', 'toxicspikes', 'stickyweb'];
+
+  private clearHazards(side: Side, label: string): void {
+    for (const id of Battle.HAZARD_IDS) {
+      if (side.sideConditions.delete(id)) {
+        this.add('-sideend', `${side.id}: ${side.name}`, `move: ${id}`, `[from] move: ${label}`);
+      }
+    }
+  }
+
+  private runHazardControl(
+    id: string, attacker: BattlePokemon, defender: BattlePokemon, ownSide: Side, foeSide: Side,
+  ): void {
+    if (id === 'defog') {
+      // Defog lowers evasion and sweeps hazards from BOTH sides.
+      this.applyBoosts(defender, { evasion: -1 }, attacker);
+      this.clearHazards(ownSide, 'Defog');
+      this.clearHazards(foeSide, 'Defog');
+      for (const s of [ownSide, foeSide]) {
+        for (const scr of ['reflect', 'lightscreen', 'auroraveil']) {
+          if (s.sideConditions.delete(scr)) {
+            this.add('-sideend', `${s.id}: ${s.name}`, `move: ${scr}`, '[from] move: Defog');
+          }
+        }
+      }
+      return;
+    }
+    if (id === 'tidyup') {
+      this.clearHazards(ownSide, 'Tidy Up');
+      this.clearHazards(foeSide, 'Tidy Up');
+      this.applyBoosts(attacker, { atk: 1, spe: 1 });
+      return;
+    }
+    // Court Change swaps every side condition between the two sides.
+    const mine = new Map(ownSide.sideConditions);
+    const theirs = new Map(foeSide.sideConditions);
+    ownSide.sideConditions.clear();
+    foeSide.sideConditions.clear();
+    for (const [k, v] of theirs) ownSide.sideConditions.set(k, v);
+    for (const [k, v] of mine) foeSide.sideConditions.set(k, v);
+    this.add('-activate', attacker.activeIdent, 'move: Court Change');
+  }
+
+  /** Screens on the DEFENDER's side halve the incoming damage. */
+  private screenMultiplier(defender: BattlePokemon, category: 'Physical' | 'Special'): number {
+    const side = defender.sideId === 'p1' ? this.sides.p1 : this.sides.p2;
+    if (side.sideConditions.has('auroraveil')) return 0.5;
+    if (category === 'Physical' && side.sideConditions.has('reflect')) return 0.5;
+    if (category === 'Special' && side.sideConditions.has('lightscreen')) return 0.5;
+    return 1;
+  }
+
+  /** Trick Room inverts the speed order for its duration. */
+  trickRoomTurns = 0;
+
   /** Weather as the battle sees it — Air Lock and Cloud Nine blank it out. */
   private get effectiveWeather(): WeatherID {
     for (const side of [this.sides.p1, this.sides.p2]) {
@@ -829,6 +1106,13 @@ export class Battle {
       attacker.removeVolatile('mustrecharge');
       this.add('cant', attacker.activeIdent, 'recharge');
       return;
+    }
+
+    // Outrage / Petal Dance lock the user in until the rage runs out.
+    const locked = attacker.volatiles.get('lockedmove');
+    if (locked?.moveId) {
+      const slot = attacker.moveSlots.find((m) => m.id === locked.moveId);
+      if (slot) choice = { type: 'move', moveIndex: attacker.moveSlots.indexOf(slot) };
     }
 
     // Releasing a charged two-turn move (Sky Attack, Solar Beam...)?
@@ -944,6 +1228,49 @@ export class Battle {
       return;
     }
 
+    // Weather Ball takes on the weather's type.
+    if (move.id === 'weatherball') {
+      const WEATHER_TYPE: Record<string, TypeName> = {
+        raindance: 'Water', sunnyday: 'Fire', sandstorm: 'Rock', snow: 'Ice',
+      };
+      const t = WEATHER_TYPE[this.effectiveWeather];
+      if (t) move = { ...move, type: t };
+    }
+    // Terrain Pulse does the same with terrain.
+    if (move.id === 'terrainpulse' && this.terrain && isGrounded(attacker)) {
+      const TERRAIN_TYPE: Record<string, TypeName> = {
+        electricterrain: 'Electric', grassyterrain: 'Grass',
+        mistyterrain: 'Fairy', psychicterrain: 'Psychic',
+      };
+      const t = TERRAIN_TYPE[this.terrain];
+      if (t) move = { ...move, type: t, basePower: move.basePower * 2 };
+    }
+    // Poltergeist only works on a Pokémon holding an item.
+    if (move.id === 'poltergeist' && !defender.itemId) {
+      this.add('-fail', attacker.activeIdent);
+      return;
+    }
+    // Brick Break and Psychic Fangs smash screens before they land.
+    if (move.id === 'brickbreak' || move.id === 'psychicfangs' || move.id === 'ragingbull') {
+      const target = attacker.sideId === 'p1' ? this.sides.p2 : this.sides.p1;
+      for (const scr of ['reflect', 'lightscreen', 'auroraveil']) {
+        if (target.sideConditions.delete(scr)) {
+          this.add('-sideend', `${target.id}: ${target.name}`, `move: ${scr}`, `[from] move: ${move.name}`);
+        }
+      }
+    }
+    // Gigaton Hammer and Blood Moon cannot be used twice in a row.
+    if ((move.id === 'gigatonhammer' || move.id === 'bloodmoon') && attacker.lastMoveId === move.id) {
+      this.add('-fail', attacker.activeIdent);
+      return;
+    }
+
+    // Fake Out and First Impression only work the turn the user arrives.
+    if ((move.id === 'fakeout' || move.id === 'firstimpression') && !attacker.switchedInThisTurn) {
+      this.add('-fail', attacker.activeIdent);
+      return;
+    }
+
     // Sucker Punch: only works if the target is about to attack.
     if (move.id === 'suckerpunch' || move.id === 'thunderclap') {
       const foeInfo = this.turnInfo[attacker.sideId === 'p1' ? 'p2' : 'p1'];
@@ -974,6 +1301,30 @@ export class Battle {
       this.checkFaint(attacker);
     }
 
+    // Glaive Rush leaves its user wide open until it moves again.
+    if (move.self?.volatileStatus === 'glaiverush' && !attacker.fainted && outcome === 'hit') {
+      attacker.addVolatile('glaiverush');
+    } else if (attacker.hasVolatile('glaiverush')) {
+      attacker.removeVolatile('glaiverush');
+    }
+
+    // Start / advance the lock, and pay for it with confusion at the end.
+    if (move.self?.volatileStatus === 'lockedmove' && !attacker.fainted && outcome === 'hit') {
+      const state = attacker.volatiles.get('lockedmove');
+      if (!state) {
+        attacker.addVolatile('lockedmove', { turns: this.prng.random(2, 4), moveId: move.id });
+      } else {
+        const left = (state.turns ?? 1) - 1;
+        if (left <= 0) {
+          attacker.removeVolatile('lockedmove');
+          this.tryAddVolatile(attacker, 'confusion', attacker, true);
+          this.add('-start', attacker.activeIdent, 'confusion', '[fatigue]');
+        } else {
+          state.turns = left;
+        }
+      }
+    }
+
     // Recharge moves cost the next turn (only when they actually hit).
     if (move.flags.recharge && outcome === 'hit' && !attacker.fainted) {
       attacker.addVolatile('mustrecharge');
@@ -990,6 +1341,23 @@ export class Battle {
         const danceTarget = move.target === 'self' ? other : attacker;
         this.executeCopiedMove(other, danceTarget, move);
         other.removeVolatile('dancing');
+      }
+    }
+
+    // Phazing moves (Roar, Whirlwind, Dragon Tail, Circle Throw) drag a random
+    // team-mate in. Suction Cups and a substitute hold the ground.
+    if (move.forceSwitch && !defender.fainted
+      && outcome !== 'blocked' && outcome !== 'missed' && outcome !== 'immune'
+      && !defenderHasAbility(attacker, defender, 'Suction Cups')
+      && !defender.hasVolatile('substitute')) {
+      const foeSide = attacker.sideId === 'p1' ? this.sides.p2 : this.sides.p1;
+      const options = foeSide.team
+        .map((p, i) => ({ p, i }))
+        .filter(({ p, i }) => !p.fainted && i !== foeSide.activeIndex);
+      if (options.length > 0) {
+        const pick = options[this.prng.random(options.length)]!;
+        this.add('-activate', defender.activeIdent, `move: ${move.name}`);
+        this.switchIn(foeSide, pick.i);
       }
     }
 
@@ -1108,6 +1476,8 @@ export class Battle {
     if (hasAbility(attacker, 'Compound Eyes')) acc *= 1.3;
     if (hasAbility(attacker, 'Hustle') && move.category === 'Physical') acc *= 0.8;
     if (hasAbility(attacker, 'Victory Star')) acc *= 1.1;
+    if (attacker.itemId === 'widelens') acc *= 1.1;
+    if (defender.itemId === 'brightpowder') acc *= 0.9;
     acc = Math.min(100, acc);
     return this.prng.randomChance(Math.round(acc * 10), 1000);
   }
@@ -1137,15 +1507,69 @@ export class Battle {
       return;
     }
 
-    // Entry hazards (Stealth Rock) go on the DEFENDER's side.
-    if (move.sideCondition === 'stealthrock') {
-      const foeSide = attacker.sideId === 'p1' ? this.sides.p2 : this.sides.p1;
-      if (foeSide.sideConditions.has('stealthrock')) {
-        this.add('-fail', attacker.activeIdent);
+    const ownSide = attacker.sideId === 'p1' ? this.sides.p1 : this.sides.p2;
+    const foeSide = attacker.sideId === 'p1' ? this.sides.p2 : this.sides.p1;
+
+    // Entry hazards go on the DEFENDER's side; screens on the user's own.
+    if (move.sideCondition) {
+      const cond = move.sideCondition;
+      const HAZARDS: Record<string, { name: string; maxLayers: number }> = {
+        stealthrock: { name: 'Stealth Rock', maxLayers: 1 },
+        spikes: { name: 'Spikes', maxLayers: 3 },
+        toxicspikes: { name: 'Toxic Spikes', maxLayers: 2 },
+        stickyweb: { name: 'Sticky Web', maxLayers: 1 },
+      };
+      const SCREENS: Record<string, string> = {
+        reflect: 'Reflect', lightscreen: 'Light Screen',
+        auroraveil: 'Aurora Veil', tailwind: 'Tailwind', safeguard: 'Safeguard',
+        mist: 'Mist',
+      };
+      const hazard = HAZARDS[cond];
+      if (hazard) {
+        const existing = foeSide.sideConditions.get(cond);
+        const layers = (existing?.layers ?? 0) + 1;
+        if (existing && layers > hazard.maxLayers) {
+          this.add('-fail', attacker.activeIdent);
+          return;
+        }
+        foeSide.sideConditions.set(cond, { layers });
+        this.add('-sidestart', `${foeSide.id}: ${foeSide.name}`, `move: ${hazard.name}`);
         return;
       }
-      foeSide.sideConditions.add('stealthrock');
-      this.add('-sidestart', `${foeSide.id}: ${foeSide.name}`, 'move: Stealth Rock');
+      const screen = SCREENS[cond];
+      if (screen) {
+        // Aurora Veil needs snow on the field.
+        if (cond === 'auroraveil' && this.weather !== 'snow') {
+          this.add('-fail', attacker.activeIdent);
+          return;
+        }
+        if (ownSide.sideConditions.has(cond)) {
+          this.add('-fail', attacker.activeIdent);
+          return;
+        }
+        const base = cond === 'tailwind' ? 4 : 5;
+        const turns = attacker.itemId === 'lightclay' && cond !== 'tailwind' ? 8 : base;
+        ownSide.sideConditions.set(cond, { turns });
+        this.add('-sidestart', `${ownSide.id}: ${ownSide.name}`, `move: ${screen}`);
+        return;
+      }
+    }
+
+    // Trick Room and friends.
+    if (move.id === 'trickroom') {
+      if (this.trickRoomTurns > 0) {
+        this.trickRoomTurns = 0;
+        this.add('-fieldend', 'move: Trick Room');
+      } else {
+        this.trickRoomTurns = 5;
+        this.add('-fieldstart', 'move: Trick Room', `[of] ${attacker.activeIdent}`);
+      }
+      return;
+    }
+
+    // Hazard control.
+    if (move.id === 'defog' || move.id === 'tidyup' || move.id === 'courtchange') {
+      this.runHazardControl(move.id, attacker, defender, ownSide, foeSide);
       return;
     }
 
@@ -1158,6 +1582,10 @@ export class Battle {
       this.add('-fail', target.activeIdent);
       return;
     }
+
+    // Moves whose entire effect lives in Showdown's imperative code, so the
+    // dex hands us nothing at all. Without these they resolved as -fail.
+    if (this.runCodedStatusMove(move, attacker, defender, ownSide, foeSide)) return;
 
     let didSomething = false;
 
@@ -1180,6 +1608,11 @@ export class Battle {
     }
     if (move.volatileStatus) {
       didSomething = this.tryAddVolatile(target, move.volatileStatus, attacker) || didSomething;
+    }
+    if (move.id === 'roost' && attacker.types.includes('Flying')) {
+      const grounded = attacker.types.filter((t) => t !== 'Flying');
+      attacker.types = grounded.length ? grounded : ['Normal'];
+      attacker.addVolatile('roost');
     }
     if (move.heal) {
       const healed = target.heal(Math.floor((target.maxhp * move.heal) / 100));
@@ -1280,28 +1713,48 @@ export class Battle {
 
     // Number of hits.
     let hits = 1;
-    if (typeof move.multihit === 'number') {
+    if (move.id === 'beatup') {
+      const side = attacker.sideId === 'p1' ? this.sides.p1 : this.sides.p2;
+      hits = Math.max(1, side.team.filter((p) => !p.fainted && !p.status).length);
+    } else if (typeof move.multihit === 'number') {
       hits = move.multihit;
     } else if (Array.isArray(move.multihit)) {
       // 2-5 hit distribution: 2 or 3 hits 35% each, 4 or 5 hits 15% each.
       const roll = this.prng.random(100);
       hits = roll < 35 ? 2 : roll < 70 ? 3 : roll < 85 ? 4 : 5;
       const [min, max] = move.multihit;
-      // Skill Link always rolls the maximum.
+      // Skill Link always rolls the maximum; Loaded Dice rolls 4-5.
       if (hasAbility(attacker, 'Skill Link')) hits = max;
+      else if (attacker.itemId === 'loadeddice') hits = Math.max(hits, this.prng.random(4, 6));
       else hits = Math.max(min, Math.min(max, hits));
     }
 
     let totalDealt = 0;
     let actualHits = 0;
 
-    for (let hit = 0; hit < hits; hit++) {
+    for (let hit = 0, hitIndex = 0; hit < hits; hit++, hitIndex++) {
       if (attacker.fainted || defender.fainted) break;
 
       let damage: number;
       let crit = false;
 
-      if (move.id === 'superfang' || move.id === 'ruination' || move.id === 'naturesmadness') {
+      if (move.id === 'counter' || move.id === 'mirrorcoat') {
+        // Return double the damage taken this turn from the matching category.
+        const want = move.id === 'counter' ? 'Physical' : 'Special';
+        const taken = attacker.damageTakenThisTurn;
+        if (!taken || taken.category !== want || taken.amount <= 0) {
+          this.add('-fail', attacker.activeIdent);
+          return 'hit';
+        }
+        damage = taken.amount * 2;
+      } else if (move.id === 'endeavor') {
+        // Bring the target down to the user's HP.
+        damage = Math.max(0, defender.hp - attacker.hp);
+        if (damage <= 0) {
+          this.add('-fail', attacker.activeIdent);
+          return 'hit';
+        }
+      } else if (move.id === 'superfang' || move.id === 'ruination' || move.id === 'naturesmadness') {
         // Halve the target's current HP.
         damage = Math.max(1, Math.floor(defender.hp / 2));
       } else if (move.ohko) {
@@ -1339,6 +1792,75 @@ export class Battle {
             basePower = ratio >= 4 ? 150 : ratio >= 3 ? 120 : ratio >= 2 ? 80 : ratio >= 1 ? 60 : 40;
             break;
           }
+          case 'beatup': {
+            // One strike per healthy team-mate; power scales off their Attack.
+            const side = attacker.sideId === 'p1' ? this.sides.p1 : this.sides.p2;
+            const healthy = side.team.filter((p) => !p.fainted && !p.status);
+            const striker = healthy[Math.min(hitIndex, healthy.length - 1)] ?? attacker;
+            basePower = 5 + Math.floor(striker.species.baseStats.atk / 10);
+            break;
+          }
+          case 'facade':
+            if (attacker.status === 'brn' || attacker.status === 'par'
+              || attacker.status === 'psn' || attacker.status === 'tox') basePower *= 2;
+            break;
+          case 'hex': case 'infernalparade':
+            if (defender.status) basePower *= 2;
+            break;
+          case 'acrobatics':
+            if (!attacker.itemId) basePower *= 2;
+            break;
+          case 'avalanche': case 'revenge':
+            if (attacker.damageTakenThisTurn) basePower *= 2;
+            break;
+          case 'payback': {
+            const foeInfo = this.turnInfo[attacker.sideId === 'p1' ? 'p2' : 'p1'];
+            if (foeInfo?.moved) basePower *= 2;
+            break;
+          }
+          case 'storedpower': case 'powertrip': {
+            const positive = (Object.values(attacker.boosts) as number[])
+              .reduce((sum, v) => sum + Math.max(0, v), 0);
+            basePower = 20 + 20 * positive;
+            break;
+          }
+          case 'ragefist':
+            basePower = Math.min(350, 50 + 50 * attacker.timesHit);
+            break;
+          case 'weatherball': {
+            const w = this.effectiveWeather;
+            if (w) basePower *= 2;
+            break;
+          }
+          case 'hydrosteam':
+            // 1.5x in sun. The damage formula halves Water moves in sun, so
+            // tripling here nets the intended 1.5x.
+            if (this.effectiveWeather === 'sunnyday') basePower *= 3;
+            break;
+          case 'expandingforce':
+            if (this.terrain === 'psychicterrain' && isGrounded(attacker)) {
+              basePower = Math.floor(basePower * 1.5);
+            }
+            break;
+          case 'risingvoltage':
+            if (this.terrain === 'electricterrain' && isGrounded(defender)) basePower *= 2;
+            break;
+          case 'psyblade':
+            if (this.terrain === 'electricterrain' && isGrounded(attacker)) {
+              basePower = Math.floor(basePower * 1.5);
+            }
+            break;
+          case 'collisioncourse': case 'electrodrift':
+            if (moveEffectiveness(move.id, move.type, defender.types) > 1) {
+              basePower = Math.floor(basePower * 4 / 3);
+            }
+            break;
+          case 'fickblebeam': case 'ficklebeam':
+            if (this.prng.randomChance(3, 10)) {
+              basePower *= 2;
+              this.add('-activate', attacker.activeIdent, 'move: Fickle Beam');
+            }
+            break;
           case 'grassknot': case 'lowkick': {
             const kg = defender.species.weightkg ?? 50;
             basePower = kg >= 200 ? 120 : kg >= 100 ? 100 : kg >= 50 ? 80 : kg >= 25 ? 60 : kg >= 10 ? 40 : 20;
@@ -1354,6 +1876,9 @@ export class Battle {
         const pinchType = PINCH_ABILITIES[attacker.ability];
         if (pinchType === move.type && attacker.hp <= Math.floor(attacker.maxhp / 3)) {
           basePower = Math.floor(basePower * 1.5); // Blaze/Torrent/Overgrow/Swarm
+        }
+        if (move.id === 'knockoff' && defender.itemId) {
+          basePower = Math.floor(basePower * 1.5);
         }
         if (attacker.hasVolatile('charge') && move.type === 'Electric') {
           basePower = Math.floor(basePower * 2);
@@ -1426,13 +1951,26 @@ export class Battle {
         // Held item power modifiers.
         const typeBoost = TYPE_BOOST_ITEMS[attacker.itemId];
         if (typeBoost === move.type) basePower = Math.floor(basePower * 1.2);
+        const signature = SIGNATURE_ITEMS[attacker.itemId];
+        if (signature && signature.species.includes(attacker.species.id)
+          && signature.types.includes(move.type)) {
+          basePower = Math.floor(basePower * signature.mult);
+        }
+        // Punching Glove powers up punches (and stops them making contact).
+        if (attacker.itemId === 'punchingglove' && move.flags.punch) {
+          basePower = Math.floor(basePower * 1.1);
+        }
         if (attacker.itemId === 'muscleband' && move.category === 'Physical') basePower = Math.floor(basePower * 1.1);
         if (attacker.itemId === 'wiseglasses' && move.category === 'Special') basePower = Math.floor(basePower * 1.1);
 
+        // Foul Play attacks with the TARGET's Attack stat.
+        const useFoeAttack = move.id === 'foulplay';
         // Unaware ignores the other side's stat stages entirely.
         const foeUnaware = defenderHasAbility(attacker, defender, 'Unaware');
         const myUnaware = hasAbility(attacker, 'Unaware');
-        let attackStat = move.overrideOffensiveStat === 'def'
+        let attackStat = useFoeAttack
+          ? defender.getStat('atk')
+          : move.overrideOffensiveStat === 'def'
           ? attacker.getStat('def', { ignoreBoosts: foeUnaware || (crit && attacker.boosts.def < 0) }) // Body Press
           : move.category === 'Physical'
             ? attacker.getStat('atk', { ignoreBoosts: foeUnaware || (crit && attacker.boosts.atk < 0) })
@@ -1488,7 +2026,9 @@ export class Battle {
           attackStat *= 2;
         }
 
-        let defenseStat = move.category === 'Physical'
+        const hitsDefense = move.category === 'Physical'
+          || move.id === 'psyshock' || move.id === 'psystrike' || move.id === 'secretsword';
+        let defenseStat = hitsDefense
           ? defender.getStat('def', { ignoreBoosts: myUnaware || (crit && defender.boosts.def > 0) })
           : defender.getStat('spd', { ignoreBoosts: myUnaware || (crit && defender.boosts.spd > 0) });
         const boostedDefStat = move.category === 'Physical' ? 'def' : 'spd';
@@ -1521,7 +2061,8 @@ export class Battle {
           attackerTypes: isStruggle ? [] : attacker.types,
           defenderTypes: isStruggle ? [] : defender.types,
           isCrit: crit,
-          isBurned: attacker.status === 'brn' && !guts, // Guts ignores burn's halving
+          // Guts and Facade both ignore the burn's halving.
+          isBurned: attacker.status === 'brn' && !guts && move.id !== 'facade',
           prng: this.prng,
           weather: this.weather,
           stabMultiplier: hasAbility(attacker, 'Adaptability') ? 2 : 1.5,
@@ -1538,6 +2079,13 @@ export class Battle {
         if (defenderHasAbility(attacker, defender, 'Filter', 'Solid Rock', 'Prism Armor') && eff > 1) {
           damage = Math.floor(damage * 0.75);
         }
+        // Reflect / Light Screen / Aurora Veil, ignored by a critical hit.
+        if (!crit) {
+          const screen = this.screenMultiplier(defender, move.category as 'Physical' | 'Special');
+          if (screen !== 1) damage = Math.floor(damage * screen);
+        }
+        // A Glaive Rush user takes double damage until it acts again.
+        if (defender.hasVolatile('glaiverush')) damage *= 2;
         // Tinted Lens: resisted hits land at full strength.
         if (hasAbility(attacker, 'Tinted Lens') && eff > 0 && eff < 1) {
           damage = Math.floor(damage * 2);
@@ -1590,6 +2138,10 @@ export class Battle {
       actualHits++;
       if (dealt > 0) {
         defender.tookDamageThisTurn = true; // breaks Focus Punch
+        if (move.category === 'Physical' || move.category === 'Special') {
+          defender.damageTakenThisTurn = { amount: dealt, category: move.category };
+          defender.timesHit++;
+        }
         if (defender.itemId === 'airballoon') {
           defender.consumeItem();
           this.add('-enditem', defender.activeIdent, 'Air Balloon');
@@ -1721,6 +2273,26 @@ export class Battle {
       this.applyBoosts(attacker, move.self.boosts);
     }
 
+    // Knock Off removes the target's item (and was 50% stronger for it).
+    if (move.id === 'knockoff' && totalDealt > 0 && !defender.fainted
+      && defender.itemId && !defenderHasAbility(attacker, defender, 'Sticky Hold')) {
+      this.add('-enditem', defender.activeIdent, defender.itemName, '[from] move: Knock Off');
+      defender.consumeItem();
+    }
+    // Rapid Spin sweeps the user's own hazards and boosts Speed.
+    if ((move.id === 'rapidspin' || move.id === 'mortalspin') && totalDealt > 0) {
+      const mySide = attacker.sideId === 'p1' ? this.sides.p1 : this.sides.p2;
+      this.clearHazards(mySide, move.name);
+      attacker.removeVolatile('partiallytrapped');
+      this.applyBoosts(attacker, { spe: 1 });
+    }
+
+    // Clear Smog resets whatever the target had built up.
+    if (move.id === 'clearsmog' && totalDealt > 0 && !defender.fainted) {
+      defender.boosts = emptyBoosts();
+      this.add('-clearboost', defender.activeIdent);
+    }
+
     // Sparkling Aria's whole gimmick: it cures the target's burn.
     if (move.id === 'sparklingaria' && totalDealt > 0 && defender.status === 'brn') {
       this.add('-curestatus', defender.activeIdent, 'brn', '[from] move: Sparkling Aria');
@@ -1790,6 +2362,23 @@ export class Battle {
       }
     }
 
+    // White Herb undoes any stat drop the moment it happens.
+    for (const p of [attacker, defender]) {
+      if (p.itemId !== 'whiteherb' || p.fainted) continue;
+      const lowered = (Object.keys(p.boosts) as BoostID[]).filter((k) => p.boosts[k] < 0);
+      if (!lowered.length) continue;
+      for (const k of lowered) p.boosts[k] = 0;
+      p.consumeItem();
+      this.add('-enditem', p.activeIdent, 'White Herb');
+      this.add('-clearnegativeboost', p.activeIdent, '[silent]');
+    }
+    // Throat Spray rewards a sound move.
+    if (move.flags.sound && !attacker.fainted && attacker.itemId === 'throatspray') {
+      attacker.consumeItem();
+      this.add('-enditem', attacker.activeIdent, 'Throat Spray');
+      this.applyBoosts(attacker, { spa: 1 });
+    }
+
     // Defensive reactions to simply being hit.
     if (totalDealt > 0 && !defender.fainted) {
       if (hasAbility(defender, 'Stamina')) {
@@ -1809,7 +2398,7 @@ export class Battle {
       if (hasAbility(defender, 'Toxic Debris') && move.category === 'Physical') {
         const foeSide = attacker.sideId === 'p1' ? this.sides.p1 : this.sides.p2;
         if (!foeSide.sideConditions.has('toxicspikes')) {
-          foeSide.sideConditions.add('toxicspikes');
+          foeSide.sideConditions.set('toxicspikes', { layers: 1 });
           this.add('-ability', defender.activeIdent, 'Toxic Debris');
           this.add('-sidestart', `${foeSide.id}: ${foeSide.name}`, 'move: Toxic Spikes');
         }
@@ -2217,6 +2806,36 @@ export class Battle {
       }
     }
 
+    // A Wish made two turns ago lands now.
+    for (const side of [this.sides.p1, this.sides.p2]) {
+      if (side.wishTurns <= 0) continue;
+      side.wishTurns--;
+      if (side.wishTurns > 0) continue;
+      const p = side.active;
+      if (p && !p.fainted && p.heal(side.wishHp) > 0) {
+        this.add('-heal', p.activeIdent, p.condition, '[from] move: Wish');
+      }
+      side.wishHp = 0;
+    }
+
+    // Screens, Tailwind and Trick Room all run out.
+    for (const side of [this.sides.p1, this.sides.p2]) {
+      for (const [id, state] of [...side.sideConditions]) {
+        if (state.turns === undefined) continue;
+        const left = state.turns - 1;
+        if (left <= 0) {
+          side.sideConditions.delete(id);
+          this.add('-sideend', `${side.id}: ${side.name}`, `move: ${id}`);
+        } else {
+          state.turns = left;
+        }
+      }
+    }
+    if (this.trickRoomTurns > 0) {
+      this.trickRoomTurns--;
+      if (this.trickRoomTurns === 0) this.add('-fieldend', 'move: Trick Room');
+    }
+
     // Terrain ticks down, and Grassy Terrain heals whoever stands in it.
     if (this.terrain) {
       this.terrainTurns--;
@@ -2311,6 +2930,22 @@ export class Battle {
         pokemon.itemName = pokemon.lastItemId;
         pokemon.itemLost = false;
         this.add('-item', pokemon.activeIdent, pokemon.itemName, `[from] ability: ${pokemon.ability}`);
+      }
+      // Chesto Berry wakes its holder; Leppa Berry restores PP.
+      if (pokemon.status === 'slp' && pokemon.itemId === 'chestoberry'
+        && !this.berriesSuppressed(pokemon)) {
+        pokemon.consumeItem();
+        this.add('-enditem', pokemon.activeIdent, 'Chesto Berry');
+        this.add('-curestatus', pokemon.activeIdent, 'slp', '[from] item: Chesto Berry');
+        pokemon.cureStatus();
+      }
+      if (pokemon.itemId === 'leppaberry' && !this.berriesSuppressed(pokemon)) {
+        const empty = pokemon.moveSlots.find((m) => m.pp === 0);
+        if (empty) {
+          pokemon.consumeItem();
+          empty.pp = Math.min(empty.maxpp, 10);
+          this.add('-enditem', pokemon.activeIdent, 'Leppa Berry');
+        }
       }
       // Shed Skin: a third of the time, shrug the status off.
       if (pokemon.status && hasAbility(pokemon, 'Shed Skin') && this.prng.randomChance(1, 3)) {
@@ -2418,6 +3053,9 @@ export class Battle {
       const pokemon = side.active;
       if (!pokemon) continue;
       pokemon.switchedInThisTurn = false;
+      if (pokemon.removeVolatile('roost')) {
+        pokemon.types = [...pokemon.species.types]; // Flying comes back
+      }
       pokemon.removeVolatile('protect');
       pokemon.removeVolatile('flinch');
       if (!pokemon.removeVolatile('usedstall')) {

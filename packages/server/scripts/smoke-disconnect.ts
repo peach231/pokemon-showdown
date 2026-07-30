@@ -46,7 +46,9 @@ function autoplay(ws: WebSocket, tag: string): void {
       if (line.startsWith('|win|')) seen.win = line.slice(5);
       if (line.startsWith('|request|')) {
         const req = JSON.parse(line.slice(9));
-        if (!req.wait) setTimeout(() => ws.send(`${roomId}|/choose default`), 30);
+        // Deliberately unhurried: this test is about disconnect handling, and a
+        // fast autoplay used to finish the whole battle during setup.
+        if (!req.wait) setTimeout(() => ws.send(`${roomId}|/choose default`), 150);
       }
     }
     // A reconnect resends the whole log in one frame, |start| included.

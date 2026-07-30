@@ -70,7 +70,7 @@ export interface MoveData {
   /** Guaranteed stat changes to the target. */
   boosts?: Partial<BoostsTable>;
   /** Stat changes / effects applied to the user. */
-  self?: { boosts?: Partial<BoostsTable> };
+  self?: { boosts?: Partial<BoostsTable>; volatileStatus?: string };
   secondaries?: SecondaryEffect[];
   /** e.g. drain [1,2] = heal 1/2 of damage dealt; recoil [33,100] = 33% of damage. */
   drain?: [number, number];
@@ -97,6 +97,10 @@ export interface MoveData {
   critRatio?: number;
   /** Terrain this move sets (Electric Terrain, Grassy Terrain, ...). */
   terrain?: string;
+  /** Drags a random team-mate in (Roar, Whirlwind, Dragon Tail, Circle Throw). */
+  forceSwitch?: boolean;
+  /** Volatile applied to the USER (e.g. lockedmove for Outrage). */
+  selfVolatileStatus?: string;
   /**
    * The user switches out after this move resolves (U-turn, Volt Switch,
    * Flip Turn, Parting Shot, Teleport, Chilly Reception). 'shedtail' also

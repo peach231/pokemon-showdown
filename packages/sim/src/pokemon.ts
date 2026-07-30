@@ -106,6 +106,10 @@ export class BattlePokemon {
   heroForme = false;
   /** Heavy Metal / Light Metal multiplier for weight-based moves. */
   weightFactor = 1;
+  /** Damage taken this turn, for Counter and Mirror Coat. */
+  damageTakenThisTurn: { amount: number; category: 'Physical' | 'Special' } | null = null;
+  /** Number of attacks this Pokemon has been struck by (Rage Fist). */
+  timesHit = 0;
 
   constructor(set: ResolvedPokemonSet, sideId: 'p1' | 'p2', position: number) {
     this.set = set;

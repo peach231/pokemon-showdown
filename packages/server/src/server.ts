@@ -26,10 +26,18 @@ import { BattleRoom } from './battle-room.js';
 import { runBot } from './bot.js';
 import { serveAsset } from './asset-proxy.js';
 
+/**
+ * Timing knobs, read lazily.
+ *
+ * These used to be module-level constants, which meant a script that set
+ * process.env AFTER its import statements (as ESM hoisting guarantees) silently
+ * got the default instead — a trap that makes the disconnect smoke test look
+ * like a product failure when it is really a mis-invocation.
+ */
 /** How long a disconnected player has to reconnect before forfeiting. */
-const DISCONNECT_MS = Number(process.env['SS_DISCONNECT_MS'] ?? 60_000);
+const disconnectMs = (): number => Number(process.env['SS_DISCONNECT_MS'] ?? 60_000);
 /** How long each battle decision may take before auto-choosing. */
-const TURN_MS = Number(process.env['SS_TURN_MS'] ?? 60_000);
+const turnMs = (): number => Number(process.env['SS_TURN_MS'] ?? 60_000);
 const BOT_NAME = 'Trainer Bot';
 const LOBBY = 'lobby';
 
@@ -694,14 +702,14 @@ export class GameServer {
     } catch { /* treat as active */ }
     if (isWait) return;
     const rqid = room.battle.rqid;
-    const seconds = Math.round(TURN_MS / 1000);
+    const seconds = Math.round(turnMs() / 1000);
     room.players[side].send(serializeServerFrame(room.id, [`|turntimer|${seconds}`]));
     this.turnTimers.set(`${room.id}|${side}`, setTimeout(() => {
       this.turnTimers.delete(`${room.id}|${side}`);
       if (room.battle.ended || room.battle.rqid !== rqid) return;
       room.broadcast([`|-message|${room.players[side].name} ran out of time!`]);
       room.submitChoice(side, 'default');
-    }, TURN_MS));
+    }, turnMs()));
   }
 
   private clearTurnTimer(roomId: string, side: SideID): void {
@@ -750,7 +758,7 @@ export class GameServer {
   private startDisconnectTimer(room: BattleRoom, user: User, side: SideID): void {
     const key = `${room.id}|${user.id}`;
     if (this.dcTimers.has(key)) return;
-    const seconds = Math.round(DISCONNECT_MS / 1000);
+    const seconds = Math.round(disconnectMs() / 1000);
     room.broadcast([`|inactive|${user.name} disconnected and has ${seconds} seconds to reconnect!`]);
     this.dcTimers.set(key, setTimeout(() => {
       this.dcTimers.delete(key);
@@ -758,7 +766,7 @@ export class GameServer {
         room.broadcast([`|-message|${user.name} lost due to inactivity.`]);
         room.battle.forfeit(side);
       }
-    }, DISCONNECT_MS));
+    }, disconnectMs()));
   }
 
   private cancelDisconnectTimers(user: User): void {
